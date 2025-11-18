@@ -32,6 +32,7 @@ router.post('/inquiry', async (req, res) => {
     // Create rental request
     const rentalRequest = new RentalRequest({
       carId,
+      requestType: 'rent',
       clientName,
       clientEmail,
       clientPhone,
@@ -84,7 +85,7 @@ router.post('/inquiry', async (req, res) => {
 // Get all rental requests (public endpoint - admin can also use /api/admin/rental-requests)
 router.get('/requests', async (req, res) => {
   try {
-    const requests = await RentalRequest.find()
+    const requests = await RentalRequest.find({ requestType: 'rent' })
       .populate('carId')
       .sort({ createdAt: -1 });
     res.json(requests);

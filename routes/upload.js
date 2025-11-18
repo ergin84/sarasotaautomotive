@@ -67,5 +67,77 @@ router.post('/images', auth, upload.array('images', 10), (req, res) => {
     }
 });
 
+// Configure multer for logo upload
+const logoStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+        const ext = path.extname(file.originalname);
+        cb(null, 'logo' + ext);
+    }
+});
+
+const logoUpload = multer({
+    storage: logoStorage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB max file size for logo
+    },
+    fileFilter: fileFilter
+});
+
+// Upload logo
+router.post('/logo', auth, logoUpload.single('logo'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+        
+        res.json({ 
+            message: 'Logo uploaded successfully',
+            url: `/uploads/${req.file.filename}` 
+        });
+    } catch (error) {
+        console.error('Logo upload error:', error);
+        res.status(500).json({ message: 'Error uploading logo', error: error.message });
+    }
+});
+
+// Configure multer for background image upload
+const bgStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+        const ext = path.extname(file.originalname);
+        cb(null, 'background' + ext);
+    }
+});
+
+const bgUpload = multer({
+    storage: bgStorage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB max file size for background
+    },
+    fileFilter: fileFilter
+});
+
+// Upload background image
+router.post('/background', auth, bgUpload.single('background'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+        
+        res.json({ 
+            message: 'Background image uploaded successfully',
+            url: `/uploads/${req.file.filename}` 
+        });
+    } catch (error) {
+        console.error('Background upload error:', error);
+        res.status(500).json({ message: 'Error uploading background image', error: error.message });
+    }
+});
+
 module.exports = router;
 

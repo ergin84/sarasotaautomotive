@@ -18,8 +18,10 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/cars', require('./routes/cars'));
 app.use('/api/brands', require('./routes/brands'));
 app.use('/api/rentals', require('./routes/rentals'));
+app.use('/api/requests', require('./routes/requests'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/site-settings', require('./routes/siteSettings'));
 app.use('/feeds', require('./routes/feeds'));
 
 // Serve static files and handle client-side routing (only for GET requests)

@@ -1,13 +1,37 @@
 // API Base URL
 const API_BASE = '/api';
 
+// Helper function to handle API responses and check for auth errors
+async function handleApiResponse(response) {
+    if (response.status === 401) {
+        // Token expired or invalid
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+        updateFooterUserInfo();
+        // Redirect to login if trying to access admin pages
+        if (window.location.hash.includes('admin')) {
+            showPage('admin-login');
+        }
+        return false;
+    }
+    return true;
+}
+
 // State
 let authToken = localStorage.getItem('authToken');
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let currentPage = 'home';
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Verify session on load (this updates authToken and currentUser)
+    await verifySession();
+    // Update footer after session verification
+    updateFooterUserInfo();
     initializeNavigation();
+    initializeCookieConsent();
     initializeModals();
     initializeAdmin();
     loadInitialPage();
@@ -18,6 +42,47 @@ function formatCarStatus(status) {
     if (status === 'coming_soon') return 'COMING SOON';
     return (status || '').toUpperCase();
 }
+
+function formatCurrency(value) {
+    if (value === null || value === undefined || value === '') {
+        return 'Price not set';
+    }
+    const number = Number(value);
+    if (Number.isNaN(number)) {
+        return value;
+    }
+    return `$${number.toLocaleString()}`;
+}
+
+const REQUEST_STATUS_OPTIONS = [
+    { value: 'new', label: 'New' },
+    { value: 'contacted', label: 'Client contacted' },
+    { value: 'ongoing', label: 'Ongoing process' },
+    { value: 'closed', label: 'Closed' }
+];
+
+function formatRequestStatusLabel(status) {
+    const option = REQUEST_STATUS_OPTIONS.find(opt => opt.value === status);
+    if (option) {
+        return option.label;
+    }
+    if (status === 'pending') return 'New';
+    if (status === 'completed') return 'Closed';
+    return status || '';
+}
+
+const REQUESTS_PER_PAGE = 6;
+
+const DEFAULT_BACKGROUND_OVERLAY = 'linear-gradient(180deg, rgba(1, 16, 24, 0.60), rgba(1, 48, 66, 0.35))';
+
+const COOKIE_CONSENT_KEY = 'cookieConsent';
+let googleAnalyticsId = '';
+let currentAnalyticsId = '';
+
+const requestPaginationState = {
+    rent: { page: 1, totalPages: 1, total: 0 },
+    sale: { page: 1, totalPages: 1, total: 0 }
+};
 
 // Navigation
 function initializeNavigation() {
@@ -66,24 +131,34 @@ function initializeNavigation() {
                 }
                 updateActiveNav(link);
             }
-            // Menu stays open - user must close it manually with X button
+            if (document.body.classList.contains('menu-open') && window.matchMedia('(max-width: 1024px)').matches) {
+                closeSidebar();
+            }
+            // On larger screens the menu remains open until manually closed
         });
     });
 
-    // Admin link in footer
-    const adminLink = document.querySelector('.admin-link');
-    if (adminLink) {
-        adminLink.addEventListener('click', (e) => {
+    // Footer static links (privacy, home badge, etc.)
+    const footerStaticLinks = document.querySelectorAll('.sidebar-footer [data-page]:not(.admin-link)');
+    footerStaticLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
             e.preventDefault();
-            const page = adminLink.getAttribute('data-page');
+            e.stopPropagation();
+            const page = link.getAttribute('data-page');
+            if (!page) return;
+
             if (page === 'admin-dashboard' && !authToken) {
                 showPage('admin-login');
+                updateActiveNavForPage('admin-login');
             } else {
                 showPage(page);
+                updateActiveNavForPage(page);
             }
-            // Don't update active nav for admin link since it's in footer
+            if (document.body.classList.contains('menu-open') && window.matchMedia('(max-width: 1024px)').matches) {
+                closeSidebar();
+            }
         });
-    }
+    });
 
     // Services contact button
     const servicesContactButton = document.querySelector('.services-contact-button');
@@ -99,6 +174,24 @@ function initializeNavigation() {
                     updateActiveNav(contactNavLink);
                 }
             }
+        });
+    }
+
+    // Bring me here (Google Maps directions)
+    const bringMeHereBtn = document.getElementById('bringMeHereBtn');
+    if (bringMeHereBtn) {
+        bringMeHereBtn.addEventListener('click', () => {
+            const explicitAddress = bringMeHereBtn.getAttribute('data-address') || '';
+            const displayedAddress = document.getElementById('contactAddress')?.textContent || '';
+            const address = (explicitAddress || displayedAddress || '').trim();
+
+            if (!address) {
+                console.warn('Bring me here clicked, but no address is set.');
+                return;
+            }
+
+            const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+            window.open(mapsUrl, '_blank', 'noopener,noreferrer');
         });
     }
 
@@ -134,6 +227,97 @@ function initializeNavigation() {
             }
         }
     });
+}
+
+function initializeCookieConsent() {
+    const banner = document.getElementById('cookieConsentBar');
+    if (!banner) return;
+
+    const acceptBtn = document.getElementById('cookieAcceptBtn');
+    const technicalBtn = document.getElementById('cookieTechnicalBtn');
+    const storedConsent = localStorage.getItem(COOKIE_CONSENT_KEY);
+
+    const hideBanner = () => {
+        banner.classList.add('hidden');
+        banner.classList.remove('visible');
+    };
+
+    const showBanner = () => {
+        banner.classList.add('visible');
+        banner.classList.remove('hidden');
+    };
+
+    const applyConsent = (value) => {
+        localStorage.setItem(COOKIE_CONSENT_KEY, value);
+        if (value === 'accepted') {
+            enableAnalyticsIfConsented();
+        }
+    };
+
+    if (storedConsent === 'accepted') {
+        hideBanner();
+        enableAnalyticsIfConsented();
+    } else if (storedConsent === 'technical') {
+        hideBanner();
+    } else {
+        showBanner();
+    }
+
+    acceptBtn?.addEventListener('click', () => {
+        applyConsent('accepted');
+        hideBanner();
+    });
+
+    technicalBtn?.addEventListener('click', () => {
+        applyConsent('technical');
+        hideBanner();
+    });
+}
+
+function enableAnalyticsIfConsented() {
+    if (localStorage.getItem(COOKIE_CONSENT_KEY) === 'accepted') {
+        enableAnalytics();
+    }
+}
+
+function enableAnalytics() {
+    const trimmedId = (googleAnalyticsId || '').trim();
+    if (!trimmedId) {
+        return;
+    }
+
+    // If the ID changed, remove prior script and reset state
+    if (currentAnalyticsId && currentAnalyticsId !== trimmedId) {
+        const oldScript = document.querySelector(`script[data-analytics-id="${currentAnalyticsId}"]`);
+        if (oldScript && oldScript.parentNode) {
+            oldScript.parentNode.removeChild(oldScript);
+        }
+        window.gaInitialized = false;
+        window.dataLayer = undefined;
+        window.gtag = undefined;
+    }
+
+    if (window.gaInitialized && currentAnalyticsId === trimmedId) {
+        return;
+    }
+
+    if (!document.querySelector(`script[data-analytics-id="${trimmedId}"]`)) {
+        const script = document.createElement('script');
+        script.src = `https://www.googletagmanager.com/gtag/js?id=${trimmedId}`;
+        script.async = true;
+        script.setAttribute('data-analytics-id', trimmedId);
+        script.setAttribute('data-cookieconsent', 'analytics');
+        document.head.appendChild(script);
+    }
+
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ window.dataLayer.push(arguments); }
+    window.gtag = window.gtag || gtag;
+
+    window.gtag('js', new Date());
+    window.gtag('config', trimmedId, { anonymize_ip: true });
+    window.gaInitialized = true;
+    currentAnalyticsId = trimmedId;
 }
 
 function showPage(pageId) {
@@ -300,7 +484,22 @@ function displayCars(cars, containerId, type) {
     if (!container) return;
 
     if (cars.length === 0) {
-        container.innerHTML = '<p style="color: #ccc; text-align: center; padding: 40px;">No cars available at this time.</p>';
+        container.innerHTML = `
+            <div class="inventory-empty">
+                <h3 class="inventory-empty-title">No cars available right now</h3>
+                <p class="inventory-empty-text">We currently do not have cars in this section. Contact us and we will evaluate a solution tailored for you.</p>
+                <a href="#" class="inventory-empty-button" data-page="contact">Contact Us</a>
+            </div>
+        `;
+
+        const contactCta = container.querySelector('.inventory-empty-button');
+        if (contactCta) {
+            contactCta.addEventListener('click', (event) => {
+                event.preventDefault();
+                showPage('contact');
+                updateActiveNavForPage('contact');
+            });
+        }
         return;
     }
 
@@ -308,7 +507,7 @@ function displayCars(cars, containerId, type) {
         // Get the first image from images array or use legacy image field
         const carImage = (car.images && car.images.length > 0) 
             ? car.images[0] 
-            : (car.image || 'https://via.placeholder.com/400x250?text=No+Image');
+            : (car.image || '/images/no-image.svg');
         
         // Get car name - use brand/model for new cars, make/model for legacy
         const carBrand = car.brand || car.make || '';
@@ -320,7 +519,7 @@ function displayCars(cars, containerId, type) {
             <img src="${carImage}" 
                  alt="${carBrand} ${carModel}" 
                  class="car-image"
-                 onerror="this.src='https://via.placeholder.com/400x250?text=No+Image'">
+                 onerror="this.src='/images/no-image.svg'">
             <div class="car-info">
                 <h3 class="car-title">${carYear ? carYear + ' ' : ''}${carBrand} ${carModel}</h3>
                 <div class="car-details">
@@ -341,50 +540,165 @@ function displayCars(cars, containerId, type) {
 async function showCarDetails(carId, type) {
     try {
         const response = await fetch(`${API_BASE}/cars/${carId}`);
-        const car = await response.json();
+        if (!response.ok) {
+            throw new Error('Car not found');
+        }
 
+        const car = await response.json();
         const modal = document.getElementById('carModal');
-        const detailsDiv = document.getElementById('carDetails');
-        const rentalForm = document.getElementById('rentalForm');
+        const detailsContainer = document.getElementById('carDetailContent');
+
+        if (!modal || !detailsContainer) {
+            return;
+        }
 
         const carBrand = car.brand || car.make || '';
         const carModel = car.model || '';
         const carYear = car.year || '';
-        
-        // Get all images
-        const carImages = (car.images && car.images.length > 0) 
-            ? car.images 
-            : (car.image ? [car.image] : []);
-        
-        let imagesHTML = '';
-        if (carImages.length > 0) {
-            imagesHTML = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 20px 0;">';
-            carImages.forEach(imgUrl => {
-                imagesHTML += `<img src="${imgUrl}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 10px;" onerror="this.src='https://via.placeholder.com/200x200?text=No+Image'">`;
-            });
-            imagesHTML += '</div>';
-        } else {
-            imagesHTML = `<img src="https://via.placeholder.com/800x400?text=No+Image" style="width: 100%; max-height: 400px; object-fit: cover; border-radius: 10px; margin: 20px 0;">`;
+        const carTitle = `${carYear ? `${carYear} ` : ''}${carBrand} ${carModel}`.trim() || 'Vehicle Details';
+
+        const rawImages = Array.isArray(car.images) ? car.images.filter(Boolean) : [];
+        if (car.image && rawImages.length === 0) {
+            rawImages.push(car.image);
         }
-        
-        detailsDiv.innerHTML = `
-            <h2>${carYear ? carYear + ' ' : ''}${carBrand} ${carModel}</h2>
-            ${imagesHTML}
-            <p><strong>Price:</strong> ${type === 'rent' ? `$${car.dailyRate}/day` : `$${car.price ? car.price.toLocaleString() : 'N/A'}`}</p>
-            ${car.mileage ? `<p><strong>Mileage:</strong> ${car.mileage.toLocaleString()} miles</p>` : ''}
-            ${car.gearbox ? `<p><strong>Gearbox:</strong> ${car.gearbox}</p>` : ''}
-            ${car.fuelType ? `<p><strong>Fuel Type:</strong> ${car.fuelType}</p>` : ''}
-            ${car.power ? `<p><strong>Power:</strong> ${car.power} HP</p>` : ''}
-            ${car.numPersons ? `<p><strong>Number of Persons:</strong> ${car.numPersons}</p>` : ''}
-            <p><strong>Status:</strong> <span class="status-${car.status}">${formatCarStatus(car.status)}</span></p>
-            ${car.description ? `<p><strong>Description:</strong></p><p>${car.description}</p>` : ''}
+        const images = rawImages.length > 0 ? rawImages : ['/images/no-image.svg'];
+
+        const specs = [];
+        if (car.mileage) specs.push({ label: 'Mileage', value: `${Number(car.mileage).toLocaleString()} miles` });
+        if (car.gearbox) specs.push({ label: 'Gearbox', value: car.gearbox });
+        if (car.fuelType) specs.push({ label: 'Fuel Type', value: car.fuelType });
+        if (car.power) specs.push({ label: 'Power', value: `${car.power} HP` });
+        if (car.numPersons && type === 'rent') specs.push({ label: 'Seats', value: `${car.numPersons} persons` });
+        if (car.year) specs.push({ label: 'Year', value: car.year });
+
+        const specGridHtml = specs.length
+            ? `<div class="car-spec-grid">
+                ${specs.map(spec => `
+                    <div class="car-spec-item">
+                        <span class="car-spec-label">${escapeHtml(spec.label)}</span>
+                        <span class="car-spec-value">${escapeHtml(String(spec.value))}</span>
+                    </div>
+                `).join('')}
+            </div>`
+            : '';
+
+        const thumbnailsHtml = images.length > 1
+            ? `<div class="car-detail-thumbnails">
+                    ${images.map((imgUrl, index) => `
+                        <button type="button" class="car-detail-thumb ${index === 0 ? 'active' : ''}" data-image="${escapeHtml(imgUrl)}" data-index="${index}" aria-label="View image ${index + 1}">
+                            <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(`${carTitle} thumbnail ${index + 1}`)}" onerror="this.src='/images/no-image.svg'">
+                        </button>
+                    `).join('')}
+               </div>`
+            : '';
+
+        const formattedPrice = type === 'rent'
+            ? `${formatCurrency(car.dailyRate)}/day`
+            : formatCurrency(car.price);
+
+        const requestIntro = type === 'rent'
+            ? 'Let us know your preferred dates and we will confirm availability.'
+            : 'Share your contact details and we will get back to you with more information.';
+
+        const rentDateFields = type === 'rent'
+            ? `
+                <div class="request-form-row">
+                    <input type="date" name="startDate" required>
+                    <input type="date" name="endDate" required>
+                </div>
+            `
+            : '';
+
+        const messagePlaceholder = type === 'rent'
+            ? 'Tell us about your rental needs (optional)'
+            : 'Let us know how we can help (optional)';
+
+        const descriptionHtml = car.description
+            ? `<div class="car-detail-description">${escapeHtml(car.description).replace(/\n/g, '<br>')}</div>`
+            : '';
+
+        detailsContainer.innerHTML = `
+            <div class="car-detail-layout">
+                <div class="car-detail-gallery">
+                    <div class="car-detail-main-image">
+                        <img src="${escapeHtml(images[0])}" alt="${escapeHtml(carTitle)}" id="carDetailMainImage" onerror="this.src='/images/no-image.svg'">
+                    </div>
+                    ${thumbnailsHtml}
+                </div>
+                <div class="car-detail-info">
+                    <div class="car-detail-header">
+                        <div class="car-detail-meta">
+                            <span class="car-detail-badge">${type === 'rent' ? 'Rental car' : 'Vehicle for sale'}</span>
+                            <span class="car-detail-badge status-${car.status || 'unknown'}">${formatCarStatus(car.status)}</span>
+                        </div>
+                        <h2 class="car-detail-title">${escapeHtml(carTitle)}</h2>
+                        <div class="car-detail-price">
+                            ${escapeHtml(formattedPrice)}
+                            <span>${type === 'rent' ? 'per day' : 'asking price'}</span>
+                        </div>
+                    </div>
+                    ${specGridHtml}
+                    ${descriptionHtml}
+                    <div class="car-request-actions">
+                        <button class="btn-primary" id="openRequestFormBtn">Request Information</button>
+                        <div class="car-request-success" id="carRequestSuccess"></div>
+                        <div class="car-request-error" id="carRequestError"></div>
+                        <div class="car-request-panel" id="carRequestPanel">
+                            <h3>Send us your request</h3>
+                            <p>${escapeHtml(requestIntro)}</p>
+                            <form id="carRequestForm" class="car-request-form" novalidate>
+                                <input type="hidden" name="carId" value="${escapeHtml(carId)}">
+                                <input type="hidden" name="requestType" value="${escapeHtml(type)}">
+                                <div class="request-form-row">
+                                    <input type="text" name="clientName" placeholder="Your Name" required>
+                                    <input type="email" name="clientEmail" placeholder="Your Email" required>
+                                </div>
+                                <div class="request-form-row">
+                                    <input type="tel" name="clientPhone" placeholder="Your Phone" required>
+                                </div>
+                                ${rentDateFields}
+                                <textarea name="message" rows="4" placeholder="${escapeHtml(messagePlaceholder)}"></textarea>
+                                <button type="submit" class="btn-primary">Send Request</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
 
-        if (type === 'rent' && car.status === 'available') {
-            rentalForm.style.display = 'block';
-            document.getElementById('rentalCarId').value = carId;
-        } else {
-            rentalForm.style.display = 'none';
+        const mainImage = detailsContainer.querySelector('#carDetailMainImage');
+        const thumbnails = detailsContainer.querySelectorAll('.car-detail-thumb');
+        thumbnails.forEach(thumb => {
+            thumb.addEventListener('click', () => {
+                const newImage = thumb.getAttribute('data-image');
+                if (mainImage && newImage) {
+                    mainImage.src = newImage;
+                }
+                thumbnails.forEach(btn => btn.classList.remove('active'));
+                thumb.classList.add('active');
+            });
+        });
+
+        const requestButton = detailsContainer.querySelector('#openRequestFormBtn');
+        const requestPanel = detailsContainer.querySelector('#carRequestPanel');
+        const requestForm = detailsContainer.querySelector('#carRequestForm');
+        const successAlert = detailsContainer.querySelector('#carRequestSuccess');
+        const errorAlert = detailsContainer.querySelector('#carRequestError');
+
+        if (requestButton && requestPanel) {
+            requestButton.addEventListener('click', () => {
+                requestPanel.classList.toggle('active');
+                if (requestPanel.classList.contains('active')) {
+                    requestPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+
+        if (requestForm) {
+            requestForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                submitCarRequest(requestForm, successAlert, errorAlert);
+            });
         }
 
         modal.style.display = 'block';
@@ -394,39 +708,123 @@ async function showCarDetails(carId, type) {
     }
 }
 
-// Rental Inquiry Form
-document.getElementById('rentalInquiryForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = {
-        carId: document.getElementById('rentalCarId').value,
-        clientName: document.getElementById('clientName').value,
-        clientEmail: document.getElementById('clientEmail').value,
-        clientPhone: document.getElementById('clientPhone').value,
-        message: document.getElementById('message').value,
-        startDate: document.getElementById('startDate').value,
-        endDate: document.getElementById('endDate').value
+async function submitCarRequest(formElement, successAlert, errorAlert) {
+    if (!formElement) return;
+
+    if (successAlert) {
+        successAlert.textContent = '';
+        successAlert.classList.remove('visible');
+    }
+    if (errorAlert) {
+        errorAlert.textContent = '';
+        errorAlert.classList.remove('visible');
+    }
+
+    const formData = new FormData(formElement);
+    const payload = {
+        carId: (formData.get('carId') || '').trim(),
+        requestType: (formData.get('requestType') || '').trim(),
+        clientName: (formData.get('clientName') || '').trim(),
+        clientEmail: (formData.get('clientEmail') || '').trim(),
+        clientPhone: (formData.get('clientPhone') || '').trim(),
+        message: (formData.get('message') || '').trim()
     };
 
+    if (!payload.carId || !payload.requestType) {
+        if (errorAlert) {
+            errorAlert.textContent = 'Missing request details. Please reload and try again.';
+            errorAlert.classList.add('visible');
+        }
+        return;
+    }
+
+    if (!payload.clientName || !payload.clientEmail || !payload.clientPhone) {
+        if (errorAlert) {
+            errorAlert.textContent = 'Please provide your name, email, and phone number.';
+            errorAlert.classList.add('visible');
+        }
+        return;
+    }
+
+    if (payload.requestType === 'rent') {
+        const startDate = (formData.get('startDate') || '').trim();
+        const endDate = (formData.get('endDate') || '').trim();
+
+        if (!startDate || !endDate) {
+            if (errorAlert) {
+                errorAlert.textContent = 'Please select both a start and end date.';
+                errorAlert.classList.add('visible');
+            }
+            return;
+        }
+
+        if (new Date(startDate) > new Date(endDate)) {
+            if (errorAlert) {
+                errorAlert.textContent = 'Start date must be before the end date.';
+                errorAlert.classList.add('visible');
+            }
+            return;
+        }
+
+        payload.startDate = startDate;
+        payload.endDate = endDate;
+    }
+
     try {
-        const response = await fetch(`${API_BASE}/rentals/inquiry`, {
+        const response = await fetch(`${API_BASE}/requests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
 
         if (response.ok) {
-            alert('Your rental inquiry has been submitted successfully! We will contact you soon.');
-            document.getElementById('carModal').style.display = 'none';
-            document.getElementById('rentalInquiryForm').reset();
+            if (successAlert) {
+                successAlert.textContent = 'Thank you! Your request has been sent.';
+                successAlert.classList.add('visible');
+            }
+
+            const requestTypeField = formElement.querySelector('input[name="requestType"]');
+            const carIdField = formElement.querySelector('input[name="carId"]');
+            const savedType = requestTypeField ? requestTypeField.value : payload.requestType;
+            const savedCarId = carIdField ? carIdField.value : payload.carId;
+
+            formElement.reset();
+
+            if (requestTypeField) requestTypeField.value = savedType;
+            if (carIdField) carIdField.value = savedCarId;
+
+            const requestPanel = formElement.closest('.car-request-panel');
+            if (requestPanel) {
+                requestPanel.classList.remove('active');
+            }
         } else {
-            alert('Error submitting inquiry. Please try again.');
+            let errorData = {};
+            let rawBody = '';
+            try {
+                rawBody = await response.text();
+                errorData = rawBody ? JSON.parse(rawBody) : {};
+            } catch {
+                errorData = {};
+            }
+            console.error('Request submission failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: rawBody || '(no body)'
+            });
+            if (errorAlert) {
+                const errorMessage = errorData.message || errorData.error || `Unable to submit your request. Server responded with status ${response.status}.`;
+                errorAlert.textContent = errorMessage;
+                errorAlert.classList.add('visible');
+            }
         }
     } catch (error) {
-        console.error('Error:', error);
-        alert('Error submitting inquiry. Please try again.');
+        console.error('Error submitting request:', error);
+        if (errorAlert) {
+            errorAlert.textContent = 'Unable to submit your request. Please try again later.';
+            errorAlert.classList.add('visible');
+        }
     }
-});
+}
 
 // Admin Login
 document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
@@ -447,7 +845,10 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
 
         if (response.ok) {
             authToken = data.token;
+            currentUser = data.user;
             localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            updateFooterUserInfo();
             showPage('admin-dashboard');
             loadAdminDashboard();
         } else {
@@ -462,32 +863,50 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
 
 // Admin Dashboard
 function initializeAdmin() {
-    // Admin navigation
-    document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+    // Admin navigation - handle both regular buttons and icon buttons
+    document.querySelectorAll('.admin-nav-btn, .admin-nav-btn-icon').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            if (e.target.id === 'logoutBtn') {
+            // Find the button element (in case click is on icon/text child)
+            const button = e.target.closest('.admin-nav-btn, .admin-nav-btn-icon');
+            if (!button) return;
+
+            if (button.id === 'logoutBtn') {
                 logout();
                 return;
             }
 
-            const section = e.target.getAttribute('data-section');
+            const section = button.getAttribute('data-section');
             if (section) {
                 document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
                 document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.admin-nav-btn-icon').forEach(b => b.classList.remove('active'));
                 
                 const targetSection = document.getElementById(section);
                 if (targetSection) {
+                    // Show the target section first
                     targetSection.classList.add('active');
-                    e.target.classList.add('active');
+                    button.classList.add('active');
+                    
+                    // Force browser to process the display change
+                    void targetSection.offsetHeight;
 
+                    // Load section content based on which section is active
                     if (section === 'manage-sale') {
                         loadAdminCars('sale');
                     } else if (section === 'manage-rent') {
                         loadAdminCars('rent');
-                    } else if (section === 'rental-requests') {
-                        loadRentalRequests();
+                    } else if (section === 'client-requests') {
+                        loadClientRequests();
                     } else if (section === 'dashboard') {
-                        loadDashboardStats();
+                        // Always reload stats when dashboard section is shown
+                        // Use double setTimeout to ensure DOM has fully updated
+                        setTimeout(() => {
+                            requestAnimationFrame(() => {
+                                loadDashboardStats();
+                            });
+                        }, 0);
+                    } else if (section === 'site-settings') {
+                        loadSiteSettings();
                     }
                 }
             }
@@ -505,14 +924,632 @@ function initializeAdmin() {
 
     // Car form submit
     document.getElementById('carForm')?.addEventListener('submit', handleCarFormSubmit);
+
+    // Site Settings
+    initializeSiteSettings();
+}
+
+// Site Settings Functions
+function initializeSiteSettings() {
+    // Load settings on page load
+    loadSiteSettingsForDisplay();
+
+    // Logo upload
+    document.getElementById('uploadLogoBtn')?.addEventListener('click', async () => {
+        const fileInput = document.getElementById('logoUpload');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showSiteSettingsError('Please select a logo file');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('logo', fileInput.files[0]);
+
+        try {
+            const response = await fetch(`${API_BASE}/upload/logo`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                document.getElementById('logoUrl').value = data.url;
+                document.getElementById('logoPreviewImg').src = data.url;
+                showSiteSettingsSuccess('Logo uploaded successfully');
+            } else {
+                showSiteSettingsError(data.message || 'Error uploading logo');
+            }
+        } catch (error) {
+            console.error('Logo upload error:', error);
+            showSiteSettingsError('Error uploading logo');
+        }
+    });
+
+    // Background upload
+    document.getElementById('uploadBackgroundBtn')?.addEventListener('click', async () => {
+        const fileInput = document.getElementById('backgroundUpload');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showSiteSettingsError('Please select a background image');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('background', fileInput.files[0]);
+
+        try {
+            const response = await fetch(`${API_BASE}/upload/background`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                document.getElementById('backgroundImageUrl').value = data.url;
+                const bgImg = document.getElementById('bgPreviewImg');
+                bgImg.src = data.url;
+                bgImg.style.display = 'block';
+                document.documentElement.style.setProperty('--site-background-image', `url('${data.url}')`);
+                document.documentElement.style.setProperty('--site-background-overlay', DEFAULT_BACKGROUND_OVERLAY);
+                showSiteSettingsSuccess('Background image uploaded successfully');
+            } else {
+                showSiteSettingsError(data.message || 'Error uploading background');
+            }
+        } catch (error) {
+            console.error('Background upload error:', error);
+            showSiteSettingsError('Error uploading background');
+        }
+    });
+
+    // Color picker synchronization with appropriate default opacities
+    setupColorPickerSync('menuBackgroundColor', 'menuBackgroundColorText', 0.65);
+    setupColorPickerSync('containerBackgroundColor', 'containerBackgroundColorText', 0.6);
+    setupColorPickerSync('containerBorderColor', 'containerBorderColorText', 0.2);
+
+    // Form submission
+    document.getElementById('siteSettingsForm')?.addEventListener('submit', handleSiteSettingsSubmit);
+
+    // Reset button
+    document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSiteSettings);
+}
+
+function setupColorPickerSync(colorPickerId, textInputId, defaultOpacity = 0.65) {
+    const colorPicker = document.getElementById(colorPickerId);
+    const textInput = document.getElementById(textInputId);
+    
+    if (colorPicker && textInput) {
+        // Sync color picker to text input
+        colorPicker.addEventListener('input', () => {
+            const hex = colorPicker.value;
+            const rgb = hexToRgb(hex);
+            if (rgb) {
+                // Preserve existing opacity if text input has a value, otherwise use default
+                const currentValue = textInput.value;
+                const existingRgba = parseRgba(currentValue);
+                const opacity = existingRgba ? existingRgba.a : defaultOpacity;
+                textInput.value = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+            }
+        });
+
+        // Sync text input to color picker (parse rgba)
+        textInput.addEventListener('input', () => {
+            const rgba = parseRgba(textInput.value);
+            if (rgba) {
+                colorPicker.value = rgbToHex(rgba.r, rgba.g, rgba.b);
+            }
+        });
+    }
+}
+
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+function rgbToHex(r, g, b) {
+    return "#" + [r, g, b].map(x => {
+        const hex = x.toString(16);
+        return hex.length === 1 ? "0" + hex : hex;
+    }).join("");
+}
+
+function parseRgba(rgbaString) {
+    const match = rgbaString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (match) {
+        return {
+            r: parseInt(match[1]),
+            g: parseInt(match[2]),
+            b: parseInt(match[3]),
+            a: match[4] ? parseFloat(match[4]) : 1
+        };
+    }
+    return null;
+}
+
+async function loadSiteSettings() {
+    try {
+        const response = await fetch(`${API_BASE}/site-settings`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const settings = await response.json();
+            populateSiteSettingsForm(settings);
+        } else {
+            showSiteSettingsError('Error loading site settings');
+        }
+    } catch (error) {
+        console.error('Error loading site settings:', error);
+        showSiteSettingsError('Error loading site settings');
+    }
+}
+
+async function loadSiteSettingsForDisplay() {
+    try {
+        const response = await fetch(`${API_BASE}/site-settings`);
+        if (response.ok) {
+            const settings = await response.json();
+            applySiteSettings(settings);
+        }
+    } catch (error) {
+        console.error('Error loading site settings for display:', error);
+    }
+}
+
+function populateSiteSettingsForm(settings) {
+    document.getElementById('siteTitle').value = settings.siteTitle || '';
+    document.getElementById('logoText').value = settings.logoText || '';
+    document.getElementById('phoneNumber').value = settings.phoneNumber || '';
+    document.getElementById('emailAddress').value = settings.emailAddress || '';
+    document.getElementById('adminEmail').value = settings.adminEmail || '';
+    document.getElementById('address').value = settings.address || '';
+    document.getElementById('googleAnalyticsId').value = settings.googleAnalyticsId || '';
+    document.getElementById('logoUrl').value = settings.logoUrl || '';
+    document.getElementById('backgroundImageUrl').value = settings.backgroundImageUrl || '';
+
+    // Set logo preview
+    if (settings.logoUrl) {
+        document.getElementById('logoPreviewImg').src = settings.logoUrl;
+    }
+
+    // Set background preview
+    const bgImg = document.getElementById('bgPreviewImg');
+    if (bgImg) {
+        if (settings.backgroundImageUrl) {
+            bgImg.src = settings.backgroundImageUrl;
+        }
+        const hasImageUrl = document.getElementById('backgroundImageUrl')?.value?.trim();
+        bgImg.style.display = hasImageUrl ? 'block' : 'none';
+    }
+
+    // Set colors - convert rgba to hex for color pickers, with new defaults
+    const menuBgColor = settings.menuBackgroundColor || 'rgba(8, 36, 48, 0.70)';
+    const menuBgRgba = parseRgba(menuBgColor);
+    if (menuBgRgba) {
+        document.getElementById('menuBackgroundColor').value = rgbToHex(menuBgRgba.r, menuBgRgba.g, menuBgRgba.b);
+        document.getElementById('menuBackgroundColorText').value = menuBgColor;
+    }
+
+    document.getElementById('menuTextColor').value = settings.menuTextColor || '#f4f7f9';
+    document.getElementById('menuAccentColor').value = settings.menuAccentColor || '#85c4e4';
+
+    const containerBgColor = settings.containerBackgroundColor || 'rgba(14, 46, 60, 0.60)';
+    const containerBgRgba = parseRgba(containerBgColor);
+    if (containerBgRgba) {
+        document.getElementById('containerBackgroundColor').value = rgbToHex(containerBgRgba.r, containerBgRgba.g, containerBgRgba.b);
+        document.getElementById('containerBackgroundColorText').value = containerBgColor;
+    }
+
+    const containerBorderColor = settings.containerBorderColor || 'rgba(194, 228, 242, 0.35)';
+    const containerBorderRgba = parseRgba(containerBorderColor);
+    if (containerBorderRgba) {
+        document.getElementById('containerBorderColor').value = rgbToHex(containerBorderRgba.r, containerBorderRgba.g, containerBorderRgba.b);
+        document.getElementById('containerBorderColorText').value = containerBorderColor;
+    }
+
+    document.getElementById('containerTextColor').value = settings.containerTextColor || '#e6eef2';
+}
+
+async function handleSiteSettingsSubmit(e) {
+    e.preventDefault();
+    hideSiteSettingsMessages();
+ 
+    const settingsData = {
+        siteTitle: document.getElementById('siteTitle').value,
+        logoText: document.getElementById('logoText').value,
+        phoneNumber: document.getElementById('phoneNumber').value,
+        emailAddress: document.getElementById('emailAddress').value,
+        adminEmail: document.getElementById('adminEmail').value,
+        address: document.getElementById('address').value,
+        googleAnalyticsId: document.getElementById('googleAnalyticsId').value.trim(),
+        logoUrl: document.getElementById('logoUrl').value,
+        backgroundImageUrl: document.getElementById('backgroundImageUrl').value,
+        menuBackgroundColor: document.getElementById('menuBackgroundColorText').value || document.getElementById('menuBackgroundColor').value,
+        menuTextColor: document.getElementById('menuTextColor').value,
+        menuAccentColor: document.getElementById('menuAccentColor').value,
+        containerBackgroundColor: document.getElementById('containerBackgroundColorText').value || document.getElementById('containerBackgroundColor').value,
+        containerBorderColor: document.getElementById('containerBorderColorText').value || document.getElementById('containerBorderColor').value,
+        containerTextColor: document.getElementById('containerTextColor').value
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/site-settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(settingsData)
+        });
+
+        if (response.ok) {
+            const updatedSettings = await response.json();
+            applySiteSettings(updatedSettings);
+            showSiteSettingsSuccess('Settings saved successfully!');
+            // Reload settings to reflect any server-side changes
+            setTimeout(() => loadSiteSettingsForDisplay(), 500);
+        } else {
+            const data = await response.json();
+            showSiteSettingsError(data.message || 'Error saving settings');
+        }
+    } catch (error) {
+        console.error('Error saving site settings:', error);
+        showSiteSettingsError('Error saving settings');
+    }
+}
+
+function applySiteSettings(settings) {
+    // Apply site title
+    if (settings.siteTitle) {
+        document.title = settings.siteTitle;
+    }
+
+    // Apply logo
+    if (settings.logoUrl) {
+        const logoImgs = document.querySelectorAll('.site-logo');
+        logoImgs.forEach(img => {
+            if (img.src !== settings.logoUrl) {
+                img.src = settings.logoUrl;
+            }
+            if (settings.logoText) {
+                img.alt = `${settings.logoText} Logo`;
+            }
+        });
+    }
+
+    // Apply logo text
+    if (settings.logoText) {
+        document.querySelectorAll('.logo-text').forEach(el => {
+            el.textContent = settings.logoText;
+        });
+    }
+
+    // Apply phone number to contact chips
+    if (settings.phoneNumber) {
+        document.querySelectorAll('[data-contact-phone-value]').forEach(el => {
+            el.textContent = settings.phoneNumber;
+        });
+
+        const telHref = buildTelHref(settings.phoneNumber);
+        document.querySelectorAll('[data-contact-phone-link]').forEach(link => {
+            if (telHref) {
+                link.href = telHref;
+            }
+            link.setAttribute('aria-label', `Call us at ${settings.phoneNumber}`);
+        });
+    }
+
+    // Apply email address (header/other locations if needed)
+    // Contact page is updated via updateContactPageWithSettings()
+
+    // Apply address to contact chips
+    if (settings.address) {
+        document.querySelectorAll('[data-contact-address-value]').forEach(el => {
+            el.textContent = settings.address;
+        });
+
+        const directionsUrl = buildDirectionsUrl(settings.address);
+        document.querySelectorAll('[data-contact-address-link]').forEach(link => {
+            if (directionsUrl) {
+                link.href = directionsUrl;
+            }
+            link.setAttribute('aria-label', `Get directions to ${settings.address}`);
+        });
+    }
+
+    // Update contact page with all settings
+    updateContactPageWithSettings(settings);
+
+    // Update analytics configuration
+    const incomingAnalyticsId = (settings.googleAnalyticsId || '').trim();
+    if (incomingAnalyticsId !== googleAnalyticsId) {
+        if (incomingAnalyticsId === '') {
+            // If analytics is being cleared, reset trackers
+            const oldScript = currentAnalyticsId
+                ? document.querySelector(`script[data-analytics-id="${currentAnalyticsId}"]`)
+                : null;
+            if (oldScript && oldScript.parentNode) {
+                oldScript.parentNode.removeChild(oldScript);
+            }
+            window.gaInitialized = false;
+            window.dataLayer = undefined;
+            window.gtag = undefined;
+            currentAnalyticsId = '';
+        }
+        googleAnalyticsId = incomingAnalyticsId;
+    }
+    enableAnalyticsIfConsented();
+
+    // Apply background via CSS variable (image only)
+    const hasCustomBackground = settings.backgroundImageUrl && settings.backgroundImageUrl.trim() !== '';
+    const backgroundImage = hasCustomBackground ? settings.backgroundImageUrl.trim() : '/site_bg.avif';
+    document.documentElement.style.setProperty('--site-background-image', `url('${backgroundImage}')`);
+    document.documentElement.style.setProperty('--site-background-overlay', DEFAULT_BACKGROUND_OVERLAY);
+
+    // Apply menu colors via CSS variables
+    if (settings.menuBackgroundColor) {
+        document.documentElement.style.setProperty('--menu-bg-color', settings.menuBackgroundColor);
+    }
+    if (settings.menuTextColor) {
+        document.documentElement.style.setProperty('--menu-text-color', settings.menuTextColor);
+    }
+    if (settings.menuAccentColor) {
+        document.documentElement.style.setProperty('--menu-accent-color', settings.menuAccentColor);
+    }
+
+    // Apply container colors via CSS variables
+    if (settings.containerBackgroundColor) {
+        document.documentElement.style.setProperty('--container-bg-color', settings.containerBackgroundColor);
+    }
+    if (settings.containerBorderColor) {
+        document.documentElement.style.setProperty('--container-border-color', settings.containerBorderColor);
+    }
+    if (settings.containerTextColor) {
+        document.documentElement.style.setProperty('--container-text-color', settings.containerTextColor);
+    }
+
+    updateFooterUserInfo();
+}
+
+function resetSiteSettings() {
+    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+        document.getElementById('siteSettingsForm').reset();
+        document.getElementById('logoUrl').value = '';
+        document.getElementById('backgroundImageUrl').value = '';
+        document.getElementById('logoPreviewImg').src = '';
+        document.getElementById('bgPreviewImg').style.display = 'none';
+        // Reset to default values
+        document.getElementById('siteTitle').value = 'Sarasota Automotive';
+        document.getElementById('logoText').value = 'Sarasota Automotive';
+        document.getElementById('phoneNumber').value = '(941) 555-0123';
+        document.getElementById('emailAddress').value = 'info@sarasotaautomotive.com';
+        document.getElementById('adminEmail').value = 'info@sarasotaautomotive.com';
+        document.getElementById('address').value = '123 MAIN STREET, SARASOTA, FL 34236';
+        document.getElementById('googleAnalyticsId').value = '';
+        
+        // Reset colors to new teal glass defaults
+        document.getElementById('menuBackgroundColor').value = '#082430';
+        document.getElementById('menuBackgroundColorText').value = 'rgba(8, 36, 48, 0.70)';
+        document.getElementById('menuTextColor').value = '#f4f7f9';
+        document.getElementById('menuAccentColor').value = '#85c4e4';
+        
+        document.getElementById('containerBackgroundColor').value = '#0e2e3c';
+        document.getElementById('containerBackgroundColorText').value = 'rgba(14, 46, 60, 0.60)';
+        document.getElementById('containerBorderColor').value = '#c2e4f2';
+        document.getElementById('containerBorderColorText').value = 'rgba(194, 228, 242, 0.35)';
+        document.getElementById('containerTextColor').value = '#e6eef2';
+    }
+}
+
+function showSiteSettingsError(message) {
+    const errorDiv = document.getElementById('siteSettingsError');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => hideSiteSettingsMessages(), 5000);
+    }
+}
+
+function showSiteSettingsSuccess(message) {
+    const successDiv = document.getElementById('siteSettingsSuccess');
+    if (successDiv) {
+        successDiv.textContent = message;
+        successDiv.style.display = 'block';
+        setTimeout(() => hideSiteSettingsMessages(), 5000);
+    }
+}
+
+function hideSiteSettingsMessages() {
+    const errorDiv = document.getElementById('siteSettingsError');
+    const successDiv = document.getElementById('siteSettingsSuccess');
+    if (errorDiv) errorDiv.style.display = 'none';
+    if (successDiv) successDiv.style.display = 'none';
 }
 
 function logout() {
     authToken = null;
+    currentUser = null;
     localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    updateFooterUserInfo();
     showPage('home');
     document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-    document.querySelector('[data-page="home"]').classList.add('active');
+    document.querySelector('[data-page="home"]')?.classList.add('active');
+}
+
+// Verify session on page load
+async function verifySession() {
+    if (!authToken) {
+        currentUser = null;
+        localStorage.removeItem('currentUser');
+        return;
+    }
+
+    // If we have a token but no user info, try to decode it
+    if (!currentUser && authToken) {
+        try {
+            // Decode JWT token to get user info (without verification, just for display)
+            const payload = JSON.parse(atob(authToken.split('.')[1]));
+            if (payload.username) {
+                currentUser = { username: payload.username, role: payload.role };
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            }
+        } catch (e) {
+            // If token is malformed, clear it
+            console.error('Error decoding token:', e);
+        }
+    }
+
+    try {
+        // Verify token by making a test API call
+        const response = await fetch(`${API_BASE}/admin/dashboard`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!response.ok) {
+            // Token is invalid or expired
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+        }
+        // If response is ok, token is valid and we keep the stored user info
+    } catch (error) {
+        console.error('Error verifying session:', error);
+        // On error, clear session
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+    }
+}
+
+// Update footer to show user info when logged in
+function updateFooterUserInfo() {
+    const footerAdminLink = document.querySelector('.footer-admin-link');
+    if (!footerAdminLink) return;
+
+    const phoneSourceEl = document.querySelector('[data-contact-phone-value]');
+    const addressSourceEl = document.querySelector('[data-contact-address-value]');
+    const phoneText = phoneSourceEl ? phoneSourceEl.textContent.trim() : '';
+    const addressText = addressSourceEl ? addressSourceEl.textContent.trim() : '';
+
+    const phoneHref = phoneText ? buildTelHref(phoneText) : '';
+    const addressHref = addressText ? buildDirectionsUrl(addressText) : '';
+
+    const contactMarkup = `
+        <div class="footer-contact-block">
+            ${phoneText ? `
+                <a class="footer-contact-link" data-contact-phone-link href="${phoneHref || '#'}" aria-label="Call us at ${escapeHtml(phoneText)}">
+                    <span class="footer-contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 0 0 1.5-1.5v-2.615a1.5 1.5 0 0 0-1.17-1.47l-3.183-.796a1.5 1.5 0 0 0-1.64.684l-.7 1.167a12.003 12.003 0 0 1-5.516-5.516l1.167-.7a1.5 1.5 0 0 0 .684-1.64L9.835 3.87A1.5 1.5 0 0 0 8.365 2.7H5.75A1.5 1.5 0 0 0 4.25 4.2v2.55z"></path>
+                        </svg>
+                    </span>
+                    <span class="footer-contact-text">
+                        <span class="footer-contact-label">Call us</span>
+                        <span class="footer-contact-value" data-contact-phone-value>${escapeHtml(phoneText)}</span>
+                    </span>
+                </a>
+            ` : ''}
+            ${addressText ? `
+                <a class="footer-contact-link footer-contact-address" data-contact-address-link href="${addressHref || '#'}" target="_blank" rel="noopener" aria-label="Get directions to ${escapeHtml(addressText)}">
+                    <span class="footer-contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path>
+                            <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1 1 15 0z"></path>
+                        </svg>
+                    </span>
+                    <span class="footer-contact-text">
+                        <span class="footer-contact-label">Visit us</span>
+                        <span class="footer-contact-value" data-contact-address-value>${escapeHtml(addressText)}</span>
+                    </span>
+                </a>
+            ` : ''}
+        </div>
+    `;
+
+    if (authToken && currentUser) {
+        footerAdminLink.innerHTML = `
+            ${contactMarkup}
+            <div class="footer-admin-status">
+                <span class="footer-admin-text">You are logged in as <strong>${escapeHtml(currentUser.username)}</strong></span>
+            </div>
+            <div class="footer-admin-actions">
+                <a href="#" id="footerAdminLink" class="admin-link" data-page="admin-dashboard">Admin Dashboard</a>
+                <span class="footer-admin-divider">|</span>
+                <a href="#" id="footerLogoutLink" class="admin-link">Logout</a>
+            </div>
+        `;
+    } else {
+        footerAdminLink.innerHTML = `
+            ${contactMarkup}
+            <a href="#" data-page="admin-login" id="footerAdminLink" class="admin-link footer-admin-access">Admin Access</a>
+        `;
+    }
+
+    const footerAdminLinkBtn = document.getElementById('footerAdminLink');
+    if (footerAdminLinkBtn) {
+        footerAdminLinkBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = footerAdminLinkBtn.getAttribute('data-page') || 'admin-login';
+            if (page === 'admin-dashboard' && !authToken) {
+                showPage('admin-login');
+                updateActiveNavForPage('admin-login');
+            } else {
+                showPage(page);
+                updateActiveNavForPage(page);
+            }
+        });
+    }
+
+    const footerLogoutLink = document.getElementById('footerLogoutLink');
+    if (footerLogoutLink) {
+        footerLogoutLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            logout();
+        });
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function buildTelHref(phoneNumber) {
+    if (!phoneNumber) return '';
+
+    const trimmed = phoneNumber.trim();
+    if (!trimmed) return '';
+
+    let normalized = trimmed.replace(/[^0-9+]/g, '');
+    if (normalized.startsWith('+')) {
+        const rest = normalized.slice(1).replace(/[^0-9]/g, '');
+        normalized = rest ? `+${rest}` : '';
+    } else {
+        normalized = normalized.replace(/[^0-9]/g, '');
+    }
+
+    return normalized ? `tel:${normalized}` : '';
+}
+
+function buildDirectionsUrl(address) {
+    if (!address) return '';
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
 async function loadAdminDashboard() {
@@ -523,24 +1560,89 @@ async function loadAdminDashboard() {
 
     loadDashboardStats();
     loadAdminCars('sale');
+    loadClientRequests();
 }
 
 async function loadDashboardStats() {
+    console.log('loadDashboardStats called');
+    
+    // Retry helper function
+    const retryLoad = (retries = 3, delay = 100) => {
+        const tryLoad = async (attempt = 0) => {
+            const statElements = {
+                totalSale: document.getElementById('stat-total-sale'),
+                availableSale: document.getElementById('stat-available-sale'),
+                sold: document.getElementById('stat-sold'),
+                rent: document.getElementById('stat-rent'),
+                newRequests: document.getElementById('stat-new-requests')
+            };
+
+            if (!statElements.totalSale) {
+                if (attempt < retries) {
+                    console.log(`Dashboard stats elements not found, retry ${attempt + 1}/${retries}...`);
+                    setTimeout(() => tryLoad(attempt + 1), delay);
+                    return;
+                } else {
+                    console.error('Dashboard stats elements not found after retries');
+                    return;
+                }
+            }
+
+            return statElements;
+        };
+        return tryLoad();
+    };
+
     try {
+        const statElements = await retryLoad();
+        if (!statElements) return;
+
+        console.log('Loading dashboard stats from API...');
         const response = await fetch(`${API_BASE}/admin/dashboard`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
 
         if (response.ok) {
             const stats = await response.json();
-            document.getElementById('stat-total-sale').textContent = stats.carsForSale.total;
-            document.getElementById('stat-available-sale').textContent = stats.carsForSale.available;
-            document.getElementById('stat-sold').textContent = stats.carsForSale.sold;
-            document.getElementById('stat-rent').textContent = stats.rentCars.total;
-            document.getElementById('stat-pending').textContent = stats.rentalRequests.pending;
+            console.log('Dashboard stats received:', stats);
+            
+            // Update stats with explicit value assignment
+            const newRentRequests = stats.requests?.rent?.new ?? 0;
+            const newSaleRequests = stats.requests?.sale?.new ?? 0;
+            const updates = [
+                { el: statElements.totalSale, value: stats.carsForSale?.total ?? 0 },
+                { el: statElements.availableSale, value: stats.carsForSale?.available ?? 0 },
+                { el: statElements.sold, value: stats.carsForSale?.sold ?? 0 },
+                { el: statElements.rent, value: stats.rentCars?.total ?? 0 },
+                { el: statElements.newRequests, value: newRentRequests + newSaleRequests }
+            ];
+
+            updates.forEach(({ el, value }) => {
+                if (el) {
+                    el.textContent = String(value);
+                    console.log(`Updated ${el.id} to ${value}`);
+                }
+            });
+            
+            console.log('All stats updated successfully');
+        } else {
+            const errorText = await response.text();
+            console.error('Failed to load dashboard stats:', response.status, response.statusText, errorText);
+            // Set stats to 0 on error
+            if (statElements) {
+                Object.values(statElements).forEach(el => {
+                    if (el) el.textContent = '0';
+                });
+            }
         }
     } catch (error) {
         console.error('Error loading stats:', error);
+        // Ensure stats show 0 on error
+        const statIds = ['stat-total-sale', 'stat-available-sale', 'stat-sold', 'stat-rent', 'stat-new-requests'];
+        statIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '0';
+        });
     }
 }
 
@@ -613,46 +1715,243 @@ function displayAdminCars(cars, containerId, type) {
     }).join('');
 }
 
-async function loadRentalRequests() {
-    try {
-        const response = await fetch(`${API_BASE}/admin/rental-requests`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
+async function loadClientRequests(targetType = 'all') {
+    if (!authToken) return;
 
-        if (response.ok) {
-            const requests = await response.json();
-            displayRentalRequests(requests);
-        }
+    const typesToLoad = targetType === 'all' ? ['rent', 'sale'] : [targetType];
+
+    try {
+        const headers = { 'Authorization': `Bearer ${authToken}` };
+
+        await Promise.all(typesToLoad.map(async (type) => {
+            const pagination = requestPaginationState[type] || { page: 1, totalPages: 1, total: 0 };
+            const params = new URLSearchParams({
+                type,
+                page: pagination.page.toString(),
+                limit: REQUESTS_PER_PAGE.toString()
+            });
+
+            const response = await fetch(`${API_BASE}/admin/requests?${params.toString()}`, { headers });
+            if (await handleApiResponse(response) === false) {
+                return;
+            }
+
+            if (!response.ok) {
+                console.error(`Error loading ${type} requests:`, response.statusText);
+                return;
+            }
+
+            const result = await normalizeRequestResult(await response.json());
+
+            if (result.totalPages > 0 && result.page > result.totalPages) {
+                requestPaginationState[type].page = result.totalPages;
+                await loadClientRequests(type);
+                return;
+            }
+
+            displayClientRequests(result, type);
+        }));
     } catch (error) {
-        console.error('Error loading rental requests:', error);
+        console.error('Error loading client requests:', error);
     }
 }
 
-function displayRentalRequests(requests) {
-    const container = document.getElementById('rentalRequestsList');
+function normalizeRequestResult(result) {
+    if (Array.isArray(result)) {
+        return {
+            data: result,
+            total: result.length,
+            page: 1,
+            totalPages: 1,
+            limit: REQUESTS_PER_PAGE
+        };
+    }
+
+    return {
+        data: Array.isArray(result.data) ? result.data : [],
+        total: typeof result.total === 'number' ? result.total : (Array.isArray(result.data) ? result.data.length : 0),
+        page: result.page || 1,
+        totalPages: result.totalPages || 1,
+        limit: result.limit || REQUESTS_PER_PAGE
+    };
+}
+
+function displayClientRequests(result, type) {
+    const { data, total, page, totalPages } = result;
+    requestPaginationState[type] = {
+        page,
+        totalPages: totalPages || 1,
+        total
+    };
+
+    const containerId = type === 'rent' ? 'rentalRequestsList' : 'saleRequestsList';
+    const counterId = type === 'rent' ? 'rentalRequestsCount' : 'saleRequestsCount';
+    const container = document.getElementById(containerId);
+    const counter = document.getElementById(counterId);
+
+    if (counter) {
+        counter.textContent = total;
+    }
+
     if (!container) return;
 
-    if (requests.length === 0) {
-        container.innerHTML = '<p style="color: #ccc;">No rental requests found.</p>';
+    if (!Array.isArray(data) || data.length === 0) {
+        container.innerHTML = `<p class="request-empty">No ${type === 'rent' ? 'rental' : 'sale'} requests yet.</p>`;
+        renderRequestPagination(type);
         return;
     }
 
-    container.innerHTML = requests.map(req => `
-        <div class="rental-request-item">
-            <h4>${req.carId ? `${req.carId.year} ${req.carId.make} ${req.carId.model}` : 'Car Deleted'}</h4>
-            <p><strong>Client:</strong> ${req.clientName}</p>
-            <p><strong>Email:</strong> ${req.clientEmail}</p>
-            <p><strong>Phone:</strong> ${req.clientPhone}</p>
-            <p><strong>Dates:</strong> ${new Date(req.startDate).toLocaleDateString()} - ${new Date(req.endDate).toLocaleDateString()}</p>
-            <p><strong>Message:</strong> ${req.message}</p>
-            <p><strong>Status:</strong> <span class="status-${req.status}">${req.status.toUpperCase()}</span></p>
-            <p><strong>Submitted:</strong> ${new Date(req.createdAt).toLocaleString()}</p>
-            ${req.status === 'pending' ? `
-                <button class="btn-edit" onclick="updateRequestStatus('${req._id}', 'contacted')">Mark as Contacted</button>
-                <button class="btn-sold" onclick="updateRequestStatus('${req._id}', 'completed')">Mark as Completed</button>
-            ` : ''}
-        </div>
-    `).join('');
+    container.innerHTML = data.map(request => {
+        const car = request.carId || {};
+        const carNameParts = [
+            car.year,
+            car.brand || car.make,
+            car.model
+        ].filter(Boolean);
+        const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle removed';
+        const submittedAt = request.createdAt ? new Date(request.createdAt).toLocaleString() : '—';
+        const rentalDates = type === 'rent' && request.startDate && request.endDate
+            ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
+            : null;
+
+        const normalizedStatus = ['new', 'contacted', 'ongoing', 'closed'].includes(request.status)
+            ? request.status
+            : (request.status === 'pending' ? 'new' : request.status === 'completed' ? 'closed' : 'new');
+        const statusLabel = formatRequestStatusLabel(normalizedStatus);
+        const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
+            <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
+                ${option.label}
+            </option>
+        `).join('');
+
+        const messageHtml = request.message
+            ? `<div class="request-message">${escapeHtml(request.message).replace(/\n/g, '<br>')}</div>`
+            : '';
+
+        return `
+            <div class="request-card">
+                <div class="request-card-header">
+                    <div class="request-card-title">
+                        <span class="request-car-name">${escapeHtml(carName)}</span>
+                        <span class="request-type-badge ${type}">${type === 'rent' ? 'Rental request' : 'Sale request'}</span>
+                    </div>
+                    <span class="request-status-badge ${normalizedStatus}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="request-meta-grid">
+                    <div class="request-meta-item">
+                        <span class="request-meta-label">Client</span>
+                        <span class="request-meta-value">${escapeHtml(request.clientName)}</span>
+                    </div>
+                    <div class="request-meta-item">
+                        <span class="request-meta-label">Email</span>
+                        <span class="request-meta-value">${escapeHtml(request.clientEmail)}</span>
+                    </div>
+                    <div class="request-meta-item">
+                        <span class="request-meta-label">Phone</span>
+                        <span class="request-meta-value">${escapeHtml(request.clientPhone)}</span>
+                    </div>
+                    <div class="request-meta-item">
+                        <span class="request-meta-label">Submitted</span>
+                        <span class="request-meta-value">${escapeHtml(submittedAt)}</span>
+                    </div>
+                    ${rentalDates ? `
+                        <div class="request-meta-item">
+                            <span class="request-meta-label">Rental window</span>
+                            <span class="request-meta-value">${escapeHtml(rentalDates)}</span>
+                        </div>` : ''}
+                </div>
+                ${messageHtml}
+                <div class="request-actions">
+                    <label for="status-${request._id}">Update status</label>
+                    <select id="status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
+                        ${statusOptions}
+                    </select>
+                    <button class="btn-delete" onclick="deleteRequest('${request._id}', '${type}')">Delete</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    renderRequestPagination(type);
+}
+
+function renderRequestPagination(type) {
+    const paginationState = requestPaginationState[type];
+    const containerId = type === 'rent' ? 'rentalRequestsPagination' : 'saleRequestsPagination';
+    const container = document.getElementById(containerId);
+    if (!container || !paginationState) return;
+
+    const { page, totalPages, total } = paginationState;
+
+    if (total <= REQUESTS_PER_PAGE) {
+        container.innerHTML = '';
+        container.style.display = total > 0 ? 'flex' : 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    const start = (page - 1) * REQUESTS_PER_PAGE + 1;
+    const end = Math.min(page * REQUESTS_PER_PAGE, total);
+
+    container.innerHTML = `
+        <button class="pagination-button" onclick="changeRequestPage('${type}', 'prev')" ${page === 1 ? 'disabled' : ''}>&lt; Prev</button>
+        <span class="pagination-info">Showing ${start}-${end} of ${total} • Page ${page} of ${totalPages}</span>
+        <button class="pagination-button" onclick="changeRequestPage('${type}', 'next')" ${page === totalPages ? 'disabled' : ''}>Next &gt;</button>
+    `;
+}
+
+function changeRequestPage(type, direction) {
+    const state = requestPaginationState[type];
+    if (!state) return;
+
+    let newPage = state.page;
+    if (direction === 'prev') {
+        newPage = Math.max(1, state.page - 1);
+    } else if (direction === 'next') {
+        newPage = Math.min(state.totalPages, state.page + 1);
+    } else if (typeof direction === 'number') {
+        newPage = Math.min(Math.max(direction, 1), state.totalPages);
+    }
+
+    if (newPage === state.page) return;
+    requestPaginationState[type].page = newPage;
+    loadClientRequests(type);
+}
+
+async function deleteRequest(requestId, type) {
+    if (!authToken) {
+        alert('You need to be logged in as admin to delete requests.');
+        return;
+    }
+
+    const confirmed = confirm('Delete this request? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const deletedType = data?.request?.requestType || type;
+            loadClientRequests(deletedType);
+            loadDashboardStats();
+        } else {
+            alert('Error deleting request');
+        }
+    } catch (error) {
+        console.error('Error deleting request:', error);
+        alert('Error deleting request');
+    }
 }
 
 // Vehicle options list
@@ -1364,7 +2663,6 @@ async function markAsSold(carId) {
         if (response.ok) {
             loadAdminCars('sale');
             loadCarsForSale();
-            loadDashboardStats();
         } else {
             alert('Error marking car as sold');
         }
@@ -1374,34 +2672,35 @@ async function markAsSold(carId) {
     }
 }
 
-async function updateRequestStatus(requestId, status) {
-    try {
-        const response = await fetch(`${API_BASE}/admin/rental-requests/${requestId}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ status })
-        });
+function updateContactPageWithSettings(settings = {}) {
+    const phone = settings.phoneNumber || '';
+    const email = settings.emailAddress || '';
+    const address = settings.address || '';
 
-        if (response.ok) {
-            loadRentalRequests();
-            loadDashboardStats();
-        } else {
-            alert('Error updating request status');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error updating request status');
+    const contactPhoneEl = document.getElementById('contactPhone');
+    if (contactPhoneEl) {
+        contactPhoneEl.textContent = phone;
+    }
+
+    const contactEmailEl = document.getElementById('contactEmail');
+    if (contactEmailEl) {
+        contactEmailEl.textContent = email;
+    }
+
+    const contactAddressEl = document.getElementById('contactAddress');
+    if (contactAddressEl) {
+        contactAddressEl.textContent = address;
+    }
+
+    const contactEmailInput = document.getElementById('contactEmailInput');
+    if (contactEmailInput && email) {
+        contactEmailInput.placeholder = email;
+    }
+
+    const bringMeHereBtn = document.getElementById('bringMeHereBtn');
+    if (bringMeHereBtn && address) {
+        bringMeHereBtn.setAttribute('data-address', address);
     }
 }
 
-// Contact Form
-document.getElementById('contactForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    alert('Thank you for your message! We will get back to you soon.');
-    e.target.reset();
-});
-
-
+//# sourceMappingURL=app.js.map

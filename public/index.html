@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sarasota Automotive</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600&family=Orbitron:wght@500;600&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Navigation Sidebar -->
@@ -16,20 +20,22 @@
             <li><a href="#" data-page="inventory-rent" class="nav-link">Car for Rent</a></li>
             <li><a href="#" data-page="contact" class="nav-link">Contacts</a></li>
         </ul>
-        <div class="footer-nav">
-            <div class="social-icons">
-                <a href="#" class="social-icon">f</a>
-                <a href="#" class="social-icon">▶</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-socials">
+                <a class="sidebar-footer-social" href="#" aria-label="Follow on Facebook">
+                    <span>f</span>
+                </a>
+                <a class="sidebar-footer-social" href="#" aria-label="Watch on YouTube">
+                    <span>▶</span>
+                </a>
             </div>
-            <div class="footer-links">
-                <a href="#">Privacy Policy</a> | 
-                <a href="#" data-page="contact">Contact Us</a> | 
-                <a href="#">Directions</a> | 
-                <a href="#">Sitemap</a>
+            <div class="sidebar-footer-links">
+                <a href="#" data-page="privacy" class="sidebar-footer-link">Privacy Policy</a>
             </div>
-            <div class="footer-admin-link">
-                <a href="#" data-page="admin-login" class="admin-link">Admin</a>
-            </div>
+            <div class="sidebar-footer-admin footer-admin-link" aria-live="polite"></div>
+            <a href="#" data-page="home" class="sidebar-footer-badge" aria-label="Sarasota Automotive home">
+                <img src="logo_footer.avif" alt="Sarasota Automotive" class="sidebar-footer-badge-logo" loading="lazy">
+            </a>
         </div>
     </nav>
 
@@ -38,32 +44,52 @@
 
     <!-- Menu Toggle Button (Hamburger/X) -->
     <button class="menu-toggle" id="menuToggle">
+        <span class="menu-toggle-label menu-toggle-label-menu">MENU</span>
         <span class="hamburger-icon">
             <span class="hamburger-line"></span>
             <span class="hamburger-line"></span>
             <span class="hamburger-line"></span>
         </span>
+        <span class="menu-toggle-label menu-toggle-label-close">CLOSE</span>
     </button>
 
     <!-- Sticky Header (Always visible, aligned with content box) -->
     <header class="sticky-header">
-        <div class="header-container">
-            <div class="header-logo">
-                <img src="logo.avif" alt="Sarasota Automotive Logo" class="site-logo">
-                <p class="logo-text">Sarasota Automotive</p>
-            </div>
-            <div class="header-contact">
-                <div class="phone-info">
-                    <span class="icon-red">📞</span>
-                    <span>PHONE: (941) 555-0123</span>
-                </div>
-                <div class="address-info">
-                    <span class="icon-red">📍</span>
-                    <span>123 MAIN STREET, SARASOTA, FL 34236</span>
-                </div>
-            </div>
-        </div>
+        <div class="header-container"></div>
     </header>
+
+    <aside id="homeIdentityPanel" class="home-identity-panel" aria-label="Sarasota Automotive quick contact">
+        <div class="home-identity-top">
+            <img src="logo.avif" alt="Sarasota Automotive Logo" class="home-identity-logo site-logo" loading="lazy">
+            <p class="home-identity-name logo-text">Sarasota Automotive</p>
+        </div>
+        <div class="home-identity-divider"></div>
+        <div class="home-identity-links">
+            <a class="home-identity-link" data-contact-phone-link href="tel:+19415550123" aria-label="Call us at (941) 555-0123">
+                <span class="home-identity-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 001.5-1.5v-2.615a1.5 1.5 0 00-1.17-1.47l-3.183-.796a1.5 1.5 0 00-1.64.684l-.7 1.167a12.003 12.003 0 01-5.516-5.516l1.167-.7a1.5 1.5 0 00.684-1.64L9.835 3.87A1.5 1.5 0 008.365 2.7H5.75A1.5 1.5 0 004.25 4.2v2.55z" />
+                    </svg>
+                </span>
+                <span class="home-identity-text">
+                    <span class="home-identity-label">Call us</span>
+                    <span class="home-identity-value" data-contact-phone-value>(941) 555-0123</span>
+                </span>
+            </a>
+            <a class="home-identity-link" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=123%20MAIN%20STREET%2C%20SARASOTA%2C%20FL%2034236" target="_blank" rel="noopener" aria-label="Get directions to 123 MAIN STREET, SARASOTA, FL 34236">
+                <span class="home-identity-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    </svg>
+                </span>
+                <span class="home-identity-text">
+                    <span class="home-identity-label">Directions</span>
+                    <span class="home-identity-value" data-contact-address-value>123 MAIN STREET, SARASOTA, FL 34236</span>
+                </span>
+            </a>
+        </div>
+    </aside>
 
     <!-- Main Content Area -->
     <main class="main-content">
@@ -78,14 +104,29 @@
                     </div>
                     <div class="home-footer">
                         <div class="footer-contact">
-                            <div class="phone-info">
-                                <span class="icon-red">📞</span>
-                                <span>PHONE: (941) 555-0123</span>
-                            </div>
-                            <div class="address-info">
-                                <span class="icon-red">📍</span>
-                                <span>123 MAIN STREET, SARASOTA, FL 34236</span>
-                            </div>
+                            <a class="contact-chip" data-contact-phone-link href="tel:+19415550123" aria-label="Call us at (941) 555-0123">
+                                <span class="contact-chip-icon" aria-hidden="true">
+                                    <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 001.5-1.5v-2.615a1.5 1.5 0 00-1.17-1.47l-3.183-.796a1.5 1.5 0 00-1.64.684l-.7 1.167a12.003 12.003 0 01-5.516-5.516l1.167-.7a1.5 1.5 0 00.684-1.64L9.835 3.87A1.5 1.5 0 008.365 2.7H5.75A1.5 1.5 0 004.25 4.2v2.55z" />
+                                    </svg>
+                                </span>
+                                <span class="contact-chip-text">
+                                    <span class="contact-chip-label">Call us</span>
+                                    <span class="contact-chip-value" data-contact-phone-value>(941) 555-0123</span>
+                                </span>
+                            </a>
+                            <a class="contact-chip" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=123%20MAIN%20STREET%2C%20SARASOTA%2C%20FL%2034236" target="_blank" rel="noopener" aria-label="Get directions to 123 MAIN STREET, SARASOTA, FL 34236">
+                                <span class="contact-chip-icon" aria-hidden="true">
+                                    <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                    </svg>
+                                </span>
+                                <span class="contact-chip-text">
+                                    <span class="contact-chip-label">Directions</span>
+                                    <span class="contact-chip-value" data-contact-address-value>123 MAIN STREET, SARASOTA, FL 34236</span>
+                                </span>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -114,22 +155,9 @@
 
         <!-- Car Details Modal -->
         <div id="carModal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content car-detail-modal">
                 <span class="close-modal">&times;</span>
-                <div id="carDetails"></div>
-                <div id="rentalForm" style="display: none;">
-                    <h3>Request Rental Information</h3>
-                    <form id="rentalInquiryForm">
-                        <input type="hidden" id="rentalCarId">
-                        <input type="text" id="clientName" placeholder="Your Name" required>
-                        <input type="email" id="clientEmail" placeholder="Your Email" required>
-                        <input type="tel" id="clientPhone" placeholder="Your Phone" required>
-                        <input type="date" id="startDate" required>
-                        <input type="date" id="endDate" required>
-                        <textarea id="message" placeholder="Message" rows="4" required></textarea>
-                        <button type="submit">Submit Inquiry</button>
-                    </form>
-                </div>
+                <div id="carDetailContent" class="car-detail-content"></div>
             </div>
         </div>
 
@@ -182,26 +210,131 @@
             </div>
         </section>
 
+        <!-- Privacy Policy Page -->
+        <section id="privacy" class="page">
+            <div class="page-container">
+                <div class="container">
+                    <h1 class="page-title">Privacy Policy</h1>
+                    <div class="privacy-content">
+                        <p class="privacy-intro">Sarasota Automotive LLC respects your privacy. This notice explains how we collect, use, and protect personal information that you share through our website forms.</p>
+
+                        <div class="privacy-section">
+                            <h2>Information We Collect</h2>
+                            <ul>
+                                <li><strong>Contact Form:</strong> Name, email address, phone number, and the content of your message.</li>
+                                <li><strong>Vehicle Request Form:</strong> Name, email address, phone number, preferred contact method, and request details for rental or sale vehicles.</li>
+                            </ul>
+                        </div>
+
+                        <div class="privacy-section">
+                            <h2>How We Use Your Information</h2>
+                            <ul>
+                                <li>Respond to your enquiries and provide the services you request.</li>
+                                <li>Schedule appointments or follow up on rental and sale requests.</li>
+                                <li>Notify you about updates directly related to your enquiry.</li>
+                            </ul>
+                        </div>
+
+                        <div class="privacy-section">
+                            <h2>How We Store and Share Data</h2>
+                            <ul>
+                                <li>Information submitted through our forms is stored securely within our customer management tools.</li>
+                                <li>Only authorised Sarasota Automotive staff can access your data.</li>
+                                <li>We do not sell or share your personal information with third parties unless required by law.</li>
+                            </ul>
+                        </div>
+
+                    <div class="privacy-section">
+                        <h2>Cookies and Tracking Technologies</h2>
+                        <p>We use cookies and similar technologies to ensure the site works correctly and to improve your experience.</p>
+                        <ul>
+                            <li><strong>Essential technical cookies:</strong> These are required for core site features such as navigation, security, form submissions, and showing the correct content. They are always active because the site cannot function without them.</li>
+                            <li><strong>Analytics cookies (optional):</strong> With your consent, we load Google Analytics to understand how visitors use the site and to help us make improvements. These cookies collect anonymised usage data such as page views, device/browser information, and general location.</li>
+                        </ul>
+                        <p>You can manage or withdraw your analytics consent at any time using the cookie banner controls. If you have previously accepted analytics cookies and wish to revoke consent, clear your browser cookies or select “Only technical cookies” when the banner is displayed again.</p>
+                        <p>Disabling analytics cookies does not affect access to our services, but it prevents us from gathering aggregated usage insights.</p>
+                    </div>
+
+                        <div class="privacy-section">
+                            <h2>Your Rights</h2>
+                            <ul>
+                                <li>Request a copy of the information we hold about you.</li>
+                                <li>Ask us to update or delete your personal information.</li>
+                                <li>Withdraw consent for us to contact you at any time.</li>
+                            </ul>
+                            <p>To exercise these rights, email us at <a href="mailto:info@sarasotaautomotive.com">info@sarasotaautomotive.com</a> or call our office at <span data-contact-phone-value>(941) 555-0123</span>.</p>
+                        </div>
+
+                        <div class="privacy-section">
+                            <h2>Updates</h2>
+                            <p>We may update this policy from time to time. The latest version will always be available on this page.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Contact Page -->
         <section id="contact" class="page">
             <div class="page-container">
                 <div class="container">
-                    <h1 class="page-title">Contacts</h1>
-                <div class="contact-content">
-                    <div class="contact-details">
-                        <h3>Get in Touch</h3>
-                        <p><strong>Phone:</strong> (941) 555-0123</p>
-                        <p><strong>Email:</strong> info@sarasotaautomotive.com</p>
-                        <p><strong>Address:</strong> 123 Main Street, Sarasota, FL 34236</p>
-                        <p><strong>Hours:</strong> Monday - Saturday: 9:00 AM - 6:00 PM</p>
+                    <h1 class="page-title">Contact Us</h1>
+                    <div class="contact-content">
+                        <div class="contact-grid">
+                            <!-- Contact Information (Left) -->
+                            <div class="contact-info-card">
+                                <h2 class="contact-section-title">Get in Touch</h2>
+                                <div class="contact-info-list">
+                                    <div class="contact-info-item">
+                                        <div class="contact-icon">📞</div>
+                                        <div class="contact-info-text">
+                                            <strong>Phone</strong>
+                                            <span id="contactPhone">(941) 555-0123</span>
+                                        </div>
+                                    </div>
+                                    <div class="contact-info-item">
+                                        <div class="contact-icon">✉️</div>
+                                        <div class="contact-info-text">
+                                            <strong>Email</strong>
+                                            <span id="contactEmail">info@sarasotaautomotive.com</span>
+                                        </div>
+                                    </div>
+                                    <div class="contact-info-item">
+                                        <div class="contact-icon">📍</div>
+                                        <div class="contact-info-text">
+                                            <strong>Address</strong>
+                                            <span id="contactAddress">123 MAIN STREET, SARASOTA, FL 34236</span>
+                                            <button id="bringMeHereBtn" class="btn-bring-me-here" title="Get directions from your current location">
+                                                <span class="btn-icon">🗺️</span>
+                                                <span>Bring me here</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="contact-info-item">
+                                        <div class="contact-icon">🕒</div>
+                                        <div class="contact-info-text">
+                                            <strong>Business Hours</strong>
+                                            <span>Monday - Saturday: 9:00 AM - 6:00 PM<br>Sunday: Closed</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contact Form (Right) -->
+                            <div class="contact-form-card">
+                                <h2 class="contact-section-title">Send us a Message</h2>
+                                <form class="contact-form" id="contactForm">
+                                    <div class="form-row">
+                                        <input type="text" id="contactName" placeholder="Your Name" required>
+                                        <input type="email" id="contactEmailInput" placeholder="Your Email" required>
+                                    </div>
+                                    <input type="text" id="contactSubject" placeholder="Subject" required>
+                                    <textarea id="contactMessage" placeholder="Your Message" rows="6" required></textarea>
+                                    <button type="submit" class="btn-submit">Send Message</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
-                    <form class="contact-form" id="contactForm">
-                        <input type="text" placeholder="Your Name" required>
-                        <input type="email" placeholder="Your Email" required>
-                        <textarea placeholder="Your Message" rows="6" required></textarea>
-                        <button type="submit">Send Message</button>
-                    </form>
-                </div>
                 </div>
             </div>
         </section>
@@ -227,11 +360,29 @@
                 <div class="container">
                     <h1 class="page-title">Admin Dashboard</h1>
                 <div class="admin-nav">
-                    <button class="admin-nav-btn active" data-section="dashboard">Dashboard</button>
-                    <button class="admin-nav-btn" data-section="manage-sale">Manage Sale Cars</button>
-                    <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
-                    <button class="admin-nav-btn" data-section="rental-requests">Rental Requests</button>
-                    <button class="admin-nav-btn" id="logoutBtn">Logout</button>
+                    <div class="admin-nav-main">
+                        <button class="admin-nav-btn active" data-section="dashboard">Dashboard</button>
+                        <button class="admin-nav-btn" data-section="manage-sale">Manage Sale Cars</button>
+                        <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
+                        <button class="admin-nav-btn" data-section="client-requests">Client Requests</button>
+                    </div>
+                    <div class="admin-nav-right">
+                        <button class="admin-nav-btn-icon" data-section="site-settings" title="Site Settings">
+                            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                            </svg>
+                            <span class="text">Settings</span>
+                        </button>
+                        <button class="admin-nav-btn-icon" id="logoutBtn" title="Logout">
+                            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            <span class="text">Logout</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Dashboard Stats -->
@@ -254,8 +405,8 @@
                             <p id="stat-rent">0</p>
                         </div>
                         <div class="stat-card">
-                            <h3>Pending Requests</h3>
-                            <p id="stat-pending">0</p>
+                            <h3>New Client Requests</h3>
+                            <p id="stat-new-requests">0</p>
                         </div>
                     </div>
                 </div>
@@ -278,10 +429,145 @@
                     <div id="rentCarsList" class="admin-cars-list"></div>
                 </div>
 
-                <!-- Rental Requests -->
-                <div id="rental-requests" class="admin-section">
-                    <h2>Rental Requests</h2>
-                    <div id="rentalRequestsList"></div>
+                <!-- Client Requests -->
+                <div id="client-requests" class="admin-section">
+                    <div class="admin-header">
+                        <h2>Client Requests</h2>
+                    </div>
+                    <div class="request-sections">
+                        <div class="request-column">
+                            <div class="request-column-header">
+                                <h3>Rental Requests</h3>
+                                <span class="request-counter" id="rentalRequestsCount">0</span>
+                            </div>
+                            <div id="rentalRequestsList" class="request-list"></div>
+                            <div class="request-pagination" id="rentalRequestsPagination" style="display: none;"></div>
+                        </div>
+                        <div class="request-column">
+                            <div class="request-column-header">
+                                <h3>Sale Requests</h3>
+                                <span class="request-counter" id="saleRequestsCount">0</span>
+                            </div>
+                            <div id="saleRequestsList" class="request-list"></div>
+                            <div class="request-pagination" id="saleRequestsPagination" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Site Settings -->
+                <div id="site-settings" class="admin-section">
+                    <h2>Site Customization</h2>
+                    <div id="siteSettingsError" style="display: none; background: rgba(220, 53, 69, 0.2); border: 1px solid rgba(220, 53, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 20px; color: #ff6b6b;"></div>
+                    <div id="siteSettingsSuccess" style="display: none; background: rgba(40, 167, 69, 0.2); border: 1px solid rgba(40, 167, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 20px; color: #51cf66;"></div>
+                    
+                    <form id="siteSettingsForm" class="site-settings-form">
+                        <!-- General Settings -->
+                        <div class="settings-group">
+                            <h3>General Settings</h3>
+                            <div class="form-group">
+                                <label for="siteTitle">Site Title</label>
+                                <input type="text" id="siteTitle" name="siteTitle" placeholder="Site Title">
+                            </div>
+                            <div class="form-group">
+                                <label for="logoText">Text Under Logo</label>
+                                <input type="text" id="logoText" name="logoText" placeholder="Text displayed under logo">
+                            </div>
+                            <div class="form-group">
+                                <label for="phoneNumber">Phone Number</label>
+                                <input type="text" id="phoneNumber" name="phoneNumber" placeholder="(941) 555-0123">
+                            </div>
+                            <div class="form-group">
+                                <label for="emailAddress">Email Address</label>
+                                <input type="email" id="emailAddress" name="emailAddress" placeholder="info@sarasotaautomotive.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="adminEmail">Admin Notification Email</label>
+                                <input type="email" id="adminEmail" name="adminEmail" placeholder="notifications@sarasotaautomotive.com">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Used for new request alerts. Defaults to ADMIN_EMAIL env var if empty.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="googleAnalyticsId">Google Analytics ID</label>
+                                <input type="text" id="googleAnalyticsId" name="googleAnalyticsId" placeholder="G-XXXXXXXXXX">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Leave blank to disable Analytics. Example: G-123ABC456.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="address">Address</label>
+                                <input type="text" id="address" name="address" placeholder="123 MAIN STREET, SARASOTA, FL 34236">
+                            </div>
+                        </div>
+
+                        <!-- Logo Upload -->
+                        <div class="settings-group">
+                            <h3>Logo</h3>
+                            <div class="form-group">
+                                <label>Current Logo</label>
+                                <div id="currentLogoPreview" style="margin: 10px 0;">
+                                    <img id="logoPreviewImg" src="" alt="Logo Preview" style="max-width: 200px; max-height: 100px; object-fit: contain; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px;">
+                                </div>
+                                <input type="file" id="logoUpload" name="logo" accept="image/*">
+                                <button type="button" class="btn-secondary" id="uploadLogoBtn">Upload New Logo</button>
+                                <input type="hidden" id="logoUrl" name="logoUrl">
+                            </div>
+                        </div>
+
+                        <!-- Background Image -->
+                        <div class="settings-group">
+                            <h3>Background Image</h3>
+
+                            <div class="form-group">
+                                <label>Current Background</label>
+                                <div id="currentBgPreview" style="margin: 10px 0;">
+                                    <img id="bgPreviewImg" src="" alt="Background Preview" style="max-width: 300px; max-height: 200px; object-fit: cover; border-radius: 5px; display: none;">
+                                </div>
+                                <input type="file" id="backgroundUpload" name="background" accept="image/*">
+                                <button type="button" class="btn-secondary" id="uploadBackgroundBtn">Upload New Background</button>
+                                <input type="hidden" id="backgroundImageUrl" name="backgroundImageUrl">
+                                <p class="settings-note">Suggested size: 2560×1440 (16:9) JPG, WebP, or AVIF for best clarity.</p>
+                            </div>
+                        </div>
+
+                        <!-- Menu Colors -->
+                        <div class="settings-group">
+                            <h3>Menu Colors</h3>
+                            <div class="form-group">
+                                <label for="menuBackgroundColor">Menu Background Color</label>
+                                <input type="color" id="menuBackgroundColor" name="menuBackgroundColor" value="#3c3c3c">
+                                <input type="text" id="menuBackgroundColorText" placeholder="rgba(60, 60, 60, 0.65)" style="margin-left: 10px; width: 200px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="menuTextColor">Menu Text Color</label>
+                                <input type="color" id="menuTextColor" name="menuTextColor" value="#ffffff">
+                            </div>
+                            <div class="form-group">
+                                <label for="menuAccentColor">Menu Accent Color</label>
+                                <input type="color" id="menuAccentColor" name="menuAccentColor" value="#dc2626">
+                            </div>
+                        </div>
+
+                        <!-- Container Colors -->
+                        <div class="settings-group">
+                            <h3>Container Box Colors</h3>
+                            <div class="form-group">
+                                <label for="containerBackgroundColor">Container Background Color</label>
+                                <input type="color" id="containerBackgroundColor" name="containerBackgroundColor" value="#464646">
+                                <input type="text" id="containerBackgroundColorText" placeholder="rgba(70, 70, 70, 0.6)" style="margin-left: 10px; width: 200px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="containerBorderColor">Container Border Color</label>
+                                <input type="color" id="containerBorderColor" name="containerBorderColor" value="#ffffff">
+                                <input type="text" id="containerBorderColorText" placeholder="rgba(255, 255, 255, 0.2)" style="margin-left: 10px; width: 200px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="containerTextColor">Container Text Color</label>
+                                <input type="color" id="containerTextColor" name="containerTextColor" value="#e0e0e0">
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Save Settings</button>
+                            <button type="button" class="btn-secondary" id="resetSettingsBtn">Reset to Defaults</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </section>
@@ -474,6 +760,22 @@
     </div>
 
     <script src="app.js"></script>
+
+    <div id="cookieConsentBar" class="cookie-consent hidden" role="region" aria-label="Cookie consent banner">
+        <div class="cookie-consent-content">
+            <div class="cookie-consent-text">
+                <strong>Cookies & Analytics</strong>
+                <p>
+                    We use essential technical cookies to keep the site working and, with your consent, Google Analytics to understand how our site is used.
+                    <a href="#privacy" data-page="privacy" class="cookie-consent-link">Review our privacy policy</a>.
+                </p>
+            </div>
+            <div class="cookie-consent-actions">
+                <button type="button" class="btn-secondary cookie-button" id="cookieTechnicalBtn" aria-label="Use only technical cookies">Only technical cookies</button>
+                <button type="button" class="btn-primary cookie-button" id="cookieAcceptBtn" aria-label="Accept analytics cookies">Allow analytics</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
 
