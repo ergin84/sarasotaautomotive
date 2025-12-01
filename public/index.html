@@ -76,7 +76,7 @@
                     <span class="home-identity-value" data-contact-phone-value>(941) 555-0123</span>
                 </span>
             </a>
-            <a class="home-identity-link" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=123%20MAIN%20STREET%2C%20SARASOTA%2C%20FL%2034236" target="_blank" rel="noopener" aria-label="Get directions to 123 MAIN STREET, SARASOTA, FL 34236">
+        <a class="home-identity-link" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=5671%20McIntosh%20Rd%20Sarasota%2C%20FL%2034233" target="_blank" rel="noopener" aria-label="Get directions to 5671 McIntosh Rd Sarasota, FL 34233">
                 <span class="home-identity-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -85,7 +85,7 @@
                 </span>
                 <span class="home-identity-text">
                     <span class="home-identity-label">Directions</span>
-                    <span class="home-identity-value" data-contact-address-value>123 MAIN STREET, SARASOTA, FL 34236</span>
+                <span class="home-identity-value" data-contact-address-value>5671 McIntosh Rd Sarasota, FL 34233</span>
                 </span>
             </a>
         </div>
@@ -115,7 +115,7 @@
                                     <span class="contact-chip-value" data-contact-phone-value>(941) 555-0123</span>
                                 </span>
                             </a>
-                            <a class="contact-chip" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=123%20MAIN%20STREET%2C%20SARASOTA%2C%20FL%2034236" target="_blank" rel="noopener" aria-label="Get directions to 123 MAIN STREET, SARASOTA, FL 34236">
+        <a class="contact-chip" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=5671%20McIntosh%20Rd%20Sarasota%2C%20FL%2034233" target="_blank" rel="noopener" aria-label="Get directions to 5671 McIntosh Rd Sarasota, FL 34233">
                                 <span class="contact-chip-icon" aria-hidden="true">
                                     <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -124,7 +124,7 @@
                                 </span>
                                 <span class="contact-chip-text">
                                     <span class="contact-chip-label">Directions</span>
-                                    <span class="contact-chip-value" data-contact-address-value>123 MAIN STREET, SARASOTA, FL 34236</span>
+                <span class="contact-chip-value" data-contact-address-value>5671 McIntosh Rd Sarasota, FL 34233</span>
                                 </span>
                             </a>
                         </div>
@@ -303,7 +303,7 @@
                                         <div class="contact-icon">📍</div>
                                         <div class="contact-info-text">
                                             <strong>Address</strong>
-                                            <span id="contactAddress">123 MAIN STREET, SARASOTA, FL 34236</span>
+                        <span id="contactAddress">5671 McIntosh Rd Sarasota, FL 34233</span>
                                             <button id="bringMeHereBtn" class="btn-bring-me-here" title="Get directions from your current location">
                                                 <span class="btn-icon">🗺️</span>
                                                 <span>Bring me here</span>
@@ -364,7 +364,8 @@
                         <button class="admin-nav-btn active" data-section="dashboard">Dashboard</button>
                         <button class="admin-nav-btn" data-section="manage-sale">Manage Sale Cars</button>
                         <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
-                        <button class="admin-nav-btn" data-section="client-requests">Client Requests</button>
+                        <button class="admin-nav-btn" data-section="sale-requests">Sale Requests</button>
+                        <button class="admin-nav-btn" data-section="rental-calendar">Rental Calendar</button>
                     </div>
                     <div class="admin-nav-right">
                         <button class="admin-nav-btn-icon" data-section="site-settings" title="Site Settings">
@@ -429,20 +430,12 @@
                     <div id="rentCarsList" class="admin-cars-list"></div>
                 </div>
 
-                <!-- Client Requests -->
-                <div id="client-requests" class="admin-section">
+                <!-- Sale Requests (list) -->
+                <div id="sale-requests" class="admin-section">
                     <div class="admin-header">
-                        <h2>Client Requests</h2>
+                        <h2>Sale Requests</h2>
                     </div>
                     <div class="request-sections">
-                        <div class="request-column">
-                            <div class="request-column-header">
-                                <h3>Rental Requests</h3>
-                                <span class="request-counter" id="rentalRequestsCount">0</span>
-                            </div>
-                            <div id="rentalRequestsList" class="request-list"></div>
-                            <div class="request-pagination" id="rentalRequestsPagination" style="display: none;"></div>
-                        </div>
                         <div class="request-column">
                             <div class="request-column-header">
                                 <h3>Sale Requests</h3>
@@ -451,6 +444,27 @@
                             <div id="saleRequestsList" class="request-list"></div>
                             <div class="request-pagination" id="saleRequestsPagination" style="display: none;"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Rental Requests Calendar -->
+                <div id="rental-calendar" class="admin-section">
+                    <div class="admin-header">
+                        <h2>Rental Requests Calendar</h2>
+                    </div>
+                    <div class="rental-calendar-header">
+                        <button type="button" class="btn-secondary calendar-nav-btn" id="rentalCalendarPrevBtn">&lt; Prev</button>
+                        <span class="rental-calendar-month" id="rentalCalendarMonthLabel">Loading…</span>
+                        <button type="button" class="btn-secondary calendar-nav-btn" id="rentalCalendarNextBtn">Next &gt;</button>
+                    </div>
+                    <div id="rentalCalendarContainer" class="rental-calendar-container"></div>
+                </div>
+
+                <!-- Request Detail Modal -->
+                <div id="requestDetailModal" class="modal">
+                    <div class="modal-content request-detail-modal">
+                        <span class="close-modal" id="closeRequestDetailModal">&times;</span>
+                        <div id="requestDetailBody"></div>
                     </div>
                 </div>
 
@@ -492,7 +506,7 @@
                             </div>
                             <div class="form-group">
                                 <label for="address">Address</label>
-                                <input type="text" id="address" name="address" placeholder="123 MAIN STREET, SARASOTA, FL 34236">
+        <input type="text" id="address" name="address" placeholder="5671 McIntosh Rd Sarasota, FL 34233">
                             </div>
                         </div>
 
@@ -719,6 +733,17 @@
                     
                     <button type="submit" class="btn-primary">Save Car</button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Global Confirm Modal -->
+        <div id="confirmModal" class="modal">
+            <div class="modal-content confirm-modal">
+                <p id="confirmMessage"></p>
+                <div class="confirm-actions">
+                    <button id="confirmCancelBtn" class="btn-secondary">Cancel</button>
+                    <button id="confirmOkBtn" class="btn-primary">OK</button>
+                </div>
             </div>
         </div>
     </main>

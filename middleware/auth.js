@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('../utils/jwtSecret');
 
 const auth = (req, res, next) => {
   try {
@@ -13,7 +14,7 @@ const auth = (req, res, next) => {
       return res.status(401).json({ message: 'No token, authorization denied' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key_here');
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
   } catch (error) {
@@ -23,6 +24,10 @@ const auth = (req, res, next) => {
     }
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ message: 'Token has expired' });
+    }
+    if (error.message && error.message.includes('JWT_SECRET')) {
+      console.error('JWT configuration error:', error.message);
+      return res.status(500).json({ message: 'Server configuration error' });
     }
     return res.status(401).json({ message: 'Authentication failed' });
   }

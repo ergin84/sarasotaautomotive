@@ -50,7 +50,8 @@ A modern, full-featured website for Sarasota Automotive with inventory managemen
    ```env
    PORT=3000
    MONGODB_URI=mongodb://localhost:27017/sarasota_automotive
-   JWT_SECRET=your_secret_key_here
+   # Minimum 32 chars; e.g. run `openssl rand -base64 48`
+   JWT_SECRET=your_super_long_random_secret
    ADMIN_EMAIL=admin@sarasotaautomotive.com
    ADMIN_PASSWORD=admin123
    SMTP_HOST=smtp.gmail.com
@@ -59,6 +60,7 @@ A modern, full-featured website for Sarasota Automotive with inventory managemen
    SMTP_PASS=your_app_password
    NODE_ENV=development
    ```
+   > The server refuses to start if `JWT_SECRET` is missing or shorter than 32 characters (override with `JWT_SECRET_MIN_LENGTH` if needed). Always generate a strong, random value before deploying.
 
 4. Make sure MongoDB is running on your system
 

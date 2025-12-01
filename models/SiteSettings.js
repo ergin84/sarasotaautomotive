@@ -27,7 +27,7 @@ const siteSettingsSchema = new mongoose.Schema({
     },
     address: {
         type: String,
-        default: '123 MAIN STREET, SARASOTA, FL 34236'
+            default: '5671 McIntosh Rd Sarasota, FL 34233'
     },
     adminEmail: {
         type: String,

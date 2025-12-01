@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 
 const ALLOWED_REQUEST_TYPES = ['rent', 'sale'];
-const ALLOWED_STATUSES = ['new', 'contacted', 'ongoing', 'closed'];
+const ALLOWED_STATUSES = ['new', 'contacted', 'ongoing', 'accepted', 'rejected', 'closed', 'deleted'];
 
 // All admin routes require authentication
 router.use(auth);
@@ -107,6 +107,19 @@ router.get('/requests', async (req, res) => {
   }
 });
 
+// Get single request by id
+router.get('/requests/:id', async (req, res) => {
+  try {
+    const request = await RentalRequest.findById(req.params.id).populate('carId');
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Backwards compatibility: rental requests endpoint
 router.get('/rental-requests', async (req, res) => {
   try {
@@ -123,11 +136,48 @@ router.get('/rental-requests', async (req, res) => {
   }
 });
 
-async function updateRequestStatusById(id, status) {
+async function updateRequestStatusById(id, status, force = false) {
   if (!ALLOWED_STATUSES.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
     throw error;
+  }
+
+  // Load existing request first
+  const existing = await RentalRequest.findById(id).populate('carId');
+
+  if (!existing) {
+    const error = new Error('Request not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // When accepting a rental request, prevent overlaps unless force=true
+  if (
+    status === 'accepted' &&
+    existing.requestType === 'rent' &&
+    existing.startDate &&
+    existing.endDate &&
+    !force
+  ) {
+    const carId = existing.carId?._id || existing.carId;
+    if (carId) {
+      const overlappingAccepted = await RentalRequest.findOne({
+        _id: { $ne: id },
+        requestType: 'rent',
+        status: 'accepted',
+        carId,
+        // overlap condition: existing.start < other.end && existing.end > other.start
+        startDate: { $lt: existing.endDate },
+        endDate: { $gt: existing.startDate }
+      }).populate('carId');
+
+      if (overlappingAccepted) {
+        const error = new Error('This rental overlaps another accepted booking for the same car.');
+        error.statusCode = 409;
+        throw error;
+      }
+    }
   }
 
   const request = await RentalRequest.findByIdAndUpdate(
@@ -136,12 +186,6 @@ async function updateRequestStatusById(id, status) {
     { new: true }
   ).populate('carId');
 
-  if (!request) {
-    const error = new Error('Request not found');
-    error.statusCode = 404;
-    throw error;
-  }
-
   return request;
 }
 
@@ -149,7 +193,8 @@ async function updateRequestStatusById(id, status) {
 router.patch('/requests/:id/status', async (req, res) => {
   try {
     const { status } = req.body || {};
-    const updated = await updateRequestStatusById(req.params.id, status);
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const updated = await updateRequestStatusById(req.params.id, status, force);
     res.json(updated);
   } catch (error) {
     const statusCode = error.statusCode || 500;
@@ -161,7 +206,8 @@ router.patch('/requests/:id/status', async (req, res) => {
 router.patch('/rental-requests/:id/status', async (req, res) => {
   try {
     const { status } = req.body || {};
-    const updated = await updateRequestStatusById(req.params.id, status);
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const updated = await updateRequestStatusById(req.params.id, status, force);
     res.json(updated);
   } catch (error) {
     const statusCode = error.statusCode || 500;

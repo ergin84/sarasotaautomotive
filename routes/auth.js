@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getJwtSecret } = require('../utils/jwtSecret');
 const router = express.Router();
 
 // Login
@@ -20,7 +21,7 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role },
-      process.env.JWT_SECRET || 'your_secret_key_here',
+      getJwtSecret(),
       { expiresIn: '24h' }
     );
 

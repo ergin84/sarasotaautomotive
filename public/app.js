@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await verifySession();
     // Update footer after session verification
     updateFooterUserInfo();
+    initConfirmDialog();
     initializeNavigation();
     initializeCookieConsent();
     initializeModals();
@@ -55,9 +56,10 @@ function formatCurrency(value) {
 }
 
 const REQUEST_STATUS_OPTIONS = [
-    { value: 'new', label: 'New' },
+    { value: 'new', label: 'New request' },
     { value: 'contacted', label: 'Client contacted' },
-    { value: 'ongoing', label: 'Ongoing process' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'rejected', label: 'Rejected' },
     { value: 'closed', label: 'Closed' }
 ];
 
@@ -72,6 +74,7 @@ function formatRequestStatusLabel(status) {
 }
 
 const REQUESTS_PER_PAGE = 6;
+const RENTAL_CALENDAR_DAY_WIDTH = 40;
 
 const DEFAULT_BACKGROUND_OVERLAY = 'linear-gradient(180deg, rgba(1, 16, 24, 0.60), rgba(1, 48, 66, 0.35))';
 
@@ -83,6 +86,158 @@ const requestPaginationState = {
     rent: { page: 1, totalPages: 1, total: 0 },
     sale: { page: 1, totalPages: 1, total: 0 }
 };
+let rentalCalendarState = null;
+let rentalCalendarRequests = [];
+
+// Global confirm dialog state
+const confirmDialog = {
+    modal: null,
+    messageEl: null,
+    confirmBtn: null,
+    cancelBtn: null
+};
+
+function initConfirmDialog() {
+    confirmDialog.modal = document.getElementById('confirmModal');
+    confirmDialog.messageEl = document.getElementById('confirmMessage');
+    confirmDialog.confirmBtn = document.getElementById('confirmOkBtn');
+    confirmDialog.cancelBtn = document.getElementById('confirmCancelBtn');
+}
+
+function openConfirmDialog(message, confirmLabel = 'OK', cancelLabel = 'Cancel') {
+    const modal = confirmDialog.modal;
+    if (!modal || !confirmDialog.messageEl || !confirmDialog.confirmBtn || !confirmDialog.cancelBtn) {
+        // Fallback to native confirm if custom modal is not available
+        return Promise.resolve(window.confirm(message));
+    }
+
+    return new Promise((resolve) => {
+        const messageEl = confirmDialog.messageEl;
+        const confirmBtn = confirmDialog.confirmBtn;
+        const cancelBtn = confirmDialog.cancelBtn;
+
+        messageEl.textContent = message;
+        confirmBtn.textContent = confirmLabel;
+        cancelBtn.textContent = cancelLabel;
+
+        modal.style.display = 'block';
+
+        const cleanup = () => {
+            modal.style.display = 'none';
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+
+        const onConfirm = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        const onCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        const onBackdrop = (event) => {
+            if (event.target === modal) {
+                cleanup();
+                resolve(false);
+            }
+        };
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                cleanup();
+                resolve(false);
+            }
+        };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onKeyDown);
+    });
+}
+
+async function updateRequestStatus(requestId, status) {
+    if (!authToken) {
+        alert('You need to be logged in as admin to update request status.');
+        return;
+    }
+
+    const label = formatRequestStatusLabel(status) || status;
+    const confirmed = await openConfirmDialog(
+        `Change request status to "${label}"?`,
+        'Confirm',
+        'Cancel'
+    );
+    if (!confirmed) return;
+
+    try {
+        let response = await fetch(`${API_BASE}/admin/requests/${requestId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+
+            // If server reports overlap when trying to accept, allow a "force" accept
+            if (response.status === 409 && status === 'accepted') {
+                const force = await openConfirmDialog(
+                    (data.message || 'This rental overlaps another accepted booking for the same car.') +
+                    '\nAccept anyway and override the existing schedule?',
+                    'Accept anyway',
+                    'Cancel'
+                );
+                if (!force) {
+                    return;
+                }
+
+                response = await fetch(`${API_BASE}/admin/requests/${requestId}/status?force=1`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ status })
+                });
+
+                if (await handleApiResponse(response) === false) {
+                    return;
+                }
+                if (!response.ok) {
+                    const retryData = await response.json().catch(() => ({}));
+                    alert(retryData.message || 'Error updating request status');
+                    return;
+                }
+            } else {
+                alert(data.message || 'Error updating request status');
+                return;
+            }
+        }
+
+        await loadClientRequests('rent');
+        await loadClientRequests('sale');
+        // Keep calendar in sync with list if visible
+        if (document.getElementById('rental-calendar')?.classList.contains('active')) {
+            await loadRentalCalendar();
+        }
+    } catch (error) {
+        console.error('Error updating request status:', error);
+        alert('Error updating request status');
+    }
+}
 
 // Navigation
 function initializeNavigation() {
@@ -895,8 +1050,10 @@ function initializeAdmin() {
                         loadAdminCars('sale');
                     } else if (section === 'manage-rent') {
                         loadAdminCars('rent');
-                    } else if (section === 'client-requests') {
-                        loadClientRequests();
+                    } else if (section === 'sale-requests') {
+                        loadClientRequests('sale');
+                    } else if (section === 'rental-calendar') {
+                        loadRentalCalendar();
                     } else if (section === 'dashboard') {
                         // Always reload stats when dashboard section is shown
                         // Use double setTimeout to ensure DOM has fully updated
@@ -1335,7 +1492,7 @@ function resetSiteSettings() {
         document.getElementById('phoneNumber').value = '(941) 555-0123';
         document.getElementById('emailAddress').value = 'info@sarasotaautomotive.com';
         document.getElementById('adminEmail').value = 'info@sarasotaautomotive.com';
-        document.getElementById('address').value = '123 MAIN STREET, SARASOTA, FL 34236';
+        document.getElementById('address').value = '5671 McIntosh Rd Sarasota, FL 34233';
         document.getElementById('googleAnalyticsId').value = '';
         
         // Reset colors to new teal glass defaults
@@ -1814,9 +1971,10 @@ function displayClientRequests(result, type) {
             ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
             : null;
 
-        const normalizedStatus = ['new', 'contacted', 'ongoing', 'closed'].includes(request.status)
+        const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
+        const normalizedStatus = validStatuses.includes(request.status)
             ? request.status
-            : (request.status === 'pending' ? 'new' : request.status === 'completed' ? 'closed' : 'new');
+            : 'new';
         const statusLabel = formatRequestStatusLabel(normalizedStatus);
         const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
             <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
@@ -1829,7 +1987,7 @@ function displayClientRequests(result, type) {
             : '';
 
         return `
-            <div class="request-card">
+            <div class="request-card request-card-clickable" onclick="openRequestById('${request._id}')">
                 <div class="request-card-header">
                     <div class="request-card-title">
                         <span class="request-car-name">${escapeHtml(carName)}</span>
@@ -1863,10 +2021,10 @@ function displayClientRequests(result, type) {
                 ${messageHtml}
                 <div class="request-actions">
                     <label for="status-${request._id}">Update status</label>
-                    <select id="status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
+                    <select id="status-${request._id}" class="request-status-select" onchange="event.stopPropagation(); updateRequestStatus('${request._id}', this.value)">
                         ${statusOptions}
                     </select>
-                    <button class="btn-delete" onclick="deleteRequest('${request._id}', '${type}')">Delete</button>
+                    <button class="btn-delete" data-delete-request-id="${request._id}" onclick="event.stopPropagation(); deleteRequest('${request._id}', '${type}')">Delete</button>
                 </div>
             </div>
         `;
@@ -1925,8 +2083,29 @@ async function deleteRequest(requestId, type) {
         return;
     }
 
-    const confirmed = confirm('Delete this request? This action cannot be undone.');
-    if (!confirmed) return;
+    // Disable all delete buttons for this request
+    const deleteButtons = document.querySelectorAll(`button[data-delete-request-id="${requestId}"]`);
+    deleteButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    const confirmed = await openConfirmDialog(
+        'Delete this request? This action cannot be undone.',
+        'Delete',
+        'Cancel'
+    );
+    
+    if (!confirmed) {
+        // Re-enable buttons if user cancelled
+        deleteButtons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        });
+        return;
+    }
 
     try {
         const response = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
@@ -1937,6 +2116,12 @@ async function deleteRequest(requestId, type) {
         });
 
         if (await handleApiResponse(response) === false) {
+            // Re-enable buttons on error
+            deleteButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.style.cursor = '';
+            });
             return;
         }
 
@@ -1945,13 +2130,430 @@ async function deleteRequest(requestId, type) {
             const deletedType = data?.request?.requestType || type;
             loadClientRequests(deletedType);
             loadDashboardStats();
+            // Keep buttons disabled - request is deleted
         } else {
             alert('Error deleting request');
+            // Re-enable buttons on error
+            deleteButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.style.cursor = '';
+            });
         }
     } catch (error) {
         console.error('Error deleting request:', error);
         alert('Error deleting request');
+        // Re-enable buttons on error
+        deleteButtons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        });
     }
+}
+
+// -------- Rental Requests Calendar (tableau) --------
+
+async function openRequestById(id) {
+    if (!authToken) return;
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${id}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (await handleApiResponse(response) === false) return;
+        if (!response.ok) {
+            alert('Error loading request details');
+            return;
+        }
+        const request = await response.json();
+        openRequestDetailModal(request);
+    } catch (error) {
+        console.error('Error loading request details:', error);
+        alert('Error loading request details');
+    }
+}
+
+function renderRequestDetailCard(request) {
+    const car = request.carId || {};
+    const carNameParts = [
+        car.year,
+        car.brand || car.make,
+        car.model
+    ].filter(Boolean);
+    const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle';
+
+    const type = request.requestType === 'rent' ? 'rent' : 'sale';
+    const submittedAt = request.createdAt ? new Date(request.createdAt).toLocaleString() : '—';
+    const rentalWindow = type === 'rent' && request.startDate && request.endDate
+        ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
+        : '—';
+
+    const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
+    const normalizedStatus = validStatuses.includes(request.status)
+        ? request.status
+        : 'new';
+    const statusLabel = formatRequestStatusLabel(normalizedStatus);
+    const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
+        <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
+            ${option.label}
+        </option>
+    `).join('');
+
+    const messageHtml = request.message
+        ? `<div class="request-message">${escapeHtml(request.message).replace(/\n/g, '<br>')}</div>`
+        : '';
+
+    return `
+        <div class="request-card">
+            <div class="request-card-header">
+                <div class="request-card-title">
+                    <span class="request-car-name">${escapeHtml(carName)}</span>
+                    <span class="request-type-badge ${type}">${type === 'rent' ? 'Rental request' : 'Sale request'}</span>
+                </div>
+                <span class="request-status-badge ${normalizedStatus}">${escapeHtml(statusLabel)}</span>
+            </div>
+            <div class="request-meta-grid">
+                <div class="request-meta-item">
+                    <span class="request-meta-label">Client</span>
+                    <span class="request-meta-value">${escapeHtml(request.clientName || '')}</span>
+                </div>
+                <div class="request-meta-item">
+                    <span class="request-meta-label">Email</span>
+                    <span class="request-meta-value">${escapeHtml(request.clientEmail || '')}</span>
+                </div>
+                <div class="request-meta-item">
+                    <span class="request-meta-label">Phone</span>
+                    <span class="request-meta-value">${escapeHtml(request.clientPhone || '')}</span>
+                </div>
+                <div class="request-meta-item">
+                    <span class="request-meta-label">Submitted</span>
+                    <span class="request-meta-value">${escapeHtml(submittedAt)}</span>
+                </div>
+                ${type === 'rent' ? `
+                <div class="request-meta-item">
+                    <span class="request-meta-label">Rental window</span>
+                    <span class="request-meta-value">${escapeHtml(rentalWindow)}</span>
+                </div>` : ''}
+            </div>
+            ${messageHtml}
+            <div class="request-actions">
+                <label for="modal-status-${request._id}">Update status</label>
+                <select id="modal-status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
+                    ${statusOptions}
+                </select>
+                <button class="btn-delete" data-delete-request-id="${request._id}" onclick="deleteRequest('${request._id}', '${type}')">Delete</button>
+            </div>
+        </div>
+    `;
+}
+
+function openRequestDetailModal(request) {
+    const modal = document.getElementById('requestDetailModal');
+    const body = document.getElementById('requestDetailBody');
+    if (!modal || !body) return;
+    body.innerHTML = renderRequestDetailCard(request);
+    modal.style.display = 'block';
+}
+
+function closeRequestDetailModal() {
+    const modal = document.getElementById('requestDetailModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+document.getElementById('closeRequestDetailModal')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeRequestDetailModal();
+});
+
+window.addEventListener('click', (e) => {
+    const modal = document.getElementById('requestDetailModal');
+    if (e.target === modal) {
+        closeRequestDetailModal();
+    }
+});
+
+async function loadRentalCalendar() {
+    if (!authToken) return;
+
+    const container = document.getElementById('rentalCalendarContainer');
+    if (!container) return;
+    container.innerHTML = 'Loading rental requests…';
+
+    try {
+        const headers = { 'Authorization': `Bearer ${authToken}` };
+        // Use a higher limit so the calendar can show a reasonable history
+        const params = new URLSearchParams({
+            type: 'rent',
+            page: '1',
+            limit: '500'
+        });
+
+        const response = await fetch(`${API_BASE}/admin/requests?${params.toString()}`, { headers });
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+        if (!response.ok) {
+            container.innerHTML = '<p class="request-empty">Error loading rental requests.</p>';
+            return;
+        }
+
+        const result = normalizeRequestResult(await response.json());
+        rentalCalendarRequests = Array.isArray(result.data) ? result.data : [];
+        if (!rentalCalendarState) {
+            const today = new Date();
+            rentalCalendarState = { year: today.getFullYear(), month: today.getMonth() + 1 };
+        }
+        renderRentalCalendarFromRequests();
+        initRentalCalendarNav();
+    } catch (error) {
+        console.error('Error loading rental calendar:', error);
+        container.innerHTML = '<p class="request-empty">Error loading rental calendar.</p>';
+    }
+}
+
+function initRentalCalendarNav() {
+    if (window.rentalCalendarNavInitialized) return;
+    window.rentalCalendarNavInitialized = true;
+
+    const prevBtn = document.getElementById('rentalCalendarPrevBtn');
+    const nextBtn = document.getElementById('rentalCalendarNextBtn');
+
+    prevBtn?.addEventListener('click', () => changeRentalCalendarMonth(-1));
+    nextBtn?.addEventListener('click', () => changeRentalCalendarMonth(1));
+}
+
+function changeRentalCalendarMonth(delta) {
+    const base = rentalCalendarState || (() => {
+        const t = new Date();
+        return { year: t.getFullYear(), month: t.getMonth() + 1 };
+    })();
+
+    const target = new Date(base.year, base.month - 1 + delta, 1);
+    rentalCalendarState = {
+        year: target.getFullYear(),
+        month: target.getMonth() + 1
+    };
+
+    renderRentalCalendarFromRequests();
+}
+
+function renderRentalCalendarFromRequests() {
+    const container = document.getElementById('rentalCalendarContainer');
+    if (!container) return;
+
+    if (!Array.isArray(rentalCalendarRequests) || rentalCalendarRequests.length === 0) {
+        container.innerHTML = '<p class="request-empty">No rental requests yet.</p>';
+        const monthLabel = document.getElementById('rentalCalendarMonthLabel');
+        if (monthLabel && rentalCalendarState) {
+            const d = new Date(rentalCalendarState.year, rentalCalendarState.month - 1, 1);
+            monthLabel.textContent = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        }
+        return;
+    }
+
+    const today = new Date();
+    const state = rentalCalendarState || { year: today.getFullYear(), month: today.getMonth() + 1 };
+    rentalCalendarState = state;
+
+    const { year, month } = state;
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0); // last day of month
+    monthEnd.setHours(23, 59, 59, 999);
+
+    const monthLabel = document.getElementById('rentalCalendarMonthLabel');
+    if (monthLabel) {
+        monthLabel.textContent = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    }
+
+    // Build list of days in the month
+    const days = [];
+    const dayDates = [];
+    const daysInMonth = monthEnd.getDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month - 1, d);
+        days.push(date.toISOString().slice(0, 10));
+        dayDates.push(date);
+    }
+
+    // Group requests by car
+    const carsMap = new Map();
+    const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
+    rentalCalendarRequests.forEach(request => {
+        const car = request.carId || {};
+        const carNameParts = [
+            car.year,
+            car.brand || car.make,
+            car.model
+        ].filter(Boolean);
+        const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle';
+        const carKey = car._id || request.carId || carName;
+
+        // Normalize dates
+        if (!request.startDate || !request.endDate) return;
+        const rs = new Date(request.startDate);
+        const re = new Date(request.endDate);
+        rs.setHours(0, 0, 0, 0);
+        re.setHours(0, 0, 0, 0);
+
+        // Only include requests that overlap this month
+        if (rs > monthEnd || re < monthStart) return;
+
+        if (!carsMap.has(carKey)) {
+            carsMap.set(carKey, { name: carName, requests: [] });
+        }
+        const status = validStatuses.includes(request.status) ? request.status : 'new';
+        carsMap.get(carKey).requests.push({
+            id: request._id,
+            startDate: rs,
+            endDate: re,
+            status,
+            clientName: request.clientName,
+            clientEmail: request.clientEmail
+        });
+    });
+
+    const cars = Array.from(carsMap.values());
+    if (cars.length === 0) {
+        container.innerHTML = '<p class="request-empty">No rental requests for this month.</p>';
+        return;
+    }
+
+    // Build header
+    const headerHtml = dayDates.map(d => {
+        const dayNum = d.getDate();
+        const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
+        const isToday =
+            d.getFullYear() === today.getFullYear() &&
+            d.getMonth() === today.getMonth() &&
+            d.getDate() === today.getDate();
+        const classes = ['calendar-day-label'];
+        if (isToday) classes.push('today');
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        if (isWeekend) classes.push('weekend');
+
+        return `
+            <div class="${classes.join(' ')}">
+                <span class="day-num">${dayNum}</span>
+                <span class="day-short">${weekday}</span>
+            </div>
+        `;
+    }).join('');
+
+    const gridTemplate = `grid-template-columns: repeat(${days.length}, ${RENTAL_CALENDAR_DAY_WIDTH}px);`;
+
+    const rowsHtml = cars.map(car => {
+        const requests = (car.requests || []).slice().sort((a, b) => a.startDate - b.startDate);
+
+        // Layout requests into lanes (subrows) to avoid overlaps
+        const lanes = [];
+        const BAR_HEIGHT = 20;
+        const BAR_GAP = 6;
+        const TOP_PADDING = 6;
+
+        requests.forEach(req => {
+            let laneIndex = 0;
+            // find first lane where this request does not overlap any existing request
+            while (true) {
+                const lane = lanes[laneIndex] || [];
+                const overlaps = lane.some(other =>
+                    !(req.endDate <= other.startDate || req.startDate >= other.endDate)
+                );
+                if (!overlaps) {
+                    req.lane = laneIndex;
+                    lane.push(req);
+                    if (!lanes[laneIndex]) {
+                        lanes[laneIndex] = lane;
+                    }
+                    break;
+                }
+                laneIndex++;
+            }
+        });
+
+        const laneCount = Math.max(1, lanes.length || 1);
+        const gridHeight = TOP_PADDING + laneCount * (BAR_HEIGHT + BAR_GAP);
+
+        const barsHtml = requests.map(req => {
+            let startIdx = -1;
+            let endIdx = -1;
+            dayDates.forEach((d, idx) => {
+                const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const nextDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+                if (req.startDate < nextDay && req.endDate >= dayStart) {
+                    if (startIdx === -1) startIdx = idx;
+                    endIdx = idx;
+                }
+            });
+            if (startIdx === -1 || endIdx === -1) return '';
+
+            const status = req.status || 'new';
+            let barClass = 'calendar-bar-new';
+            if (status === 'accepted') {
+                barClass = 'calendar-bar-accepted';
+            } else if (status === 'rejected') {
+                barClass = 'calendar-bar-rejected';
+            } else if (status === 'closed') {
+                barClass = 'calendar-bar-closed';
+            } else if (status === 'contacted') {
+                barClass = 'calendar-bar-contacted';
+            }
+
+            const defaultLabel = status === 'accepted'
+                ? 'Accepted'
+                : status === 'rejected'
+                    ? 'Rejected'
+                    : status === 'closed'
+                        ? 'Closed'
+                        : 'Request';
+            const label = (req.clientName || '').split(' ')[0] || defaultLabel;
+            const tooltipParts = [
+                req.clientName || '',
+                req.clientEmail || '',
+                `${req.startDate.toLocaleDateString()} → ${req.endDate.toLocaleDateString()}`
+            ].filter(Boolean);
+            const tooltip = tooltipParts.join(' · ');
+
+            const dayWidth = RENTAL_CALENDAR_DAY_WIDTH;
+            const leftPx = (startIdx + 0.5) * dayWidth;
+            const rightPx = (endIdx + 0.5) * dayWidth;
+            const widthPx = Math.max(dayWidth * 0.6, rightPx - leftPx);
+            const laneIndex = typeof req.lane === 'number' ? req.lane : 0;
+            const topPx = TOP_PADDING + laneIndex * (BAR_HEIGHT + BAR_GAP);
+
+            return `
+                <div class="calendar-request-bar ${barClass}"
+                     style="left: ${leftPx}px; width: ${widthPx}px; top: ${topPx}px;"
+                     title="${escapeHtml(tooltip)}"
+                     data-request-id="${req.id}"
+                     onclick="openRequestById('${req.id}')">
+                    <span>${escapeHtml(label)}</span>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="rental-calendar-row">
+                <div class="rental-calendar-car">${escapeHtml(car.name)}</div>
+                <div class="rental-calendar-grid" style="${gridTemplate} height: ${gridHeight}px;">
+                    ${barsHtml || ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="rental-calendar-table">
+            <div class="rental-calendar-header-row">
+                <div class="rental-calendar-car-header">Car</div>
+                <div class="rental-calendar-grid header" style="${gridTemplate}">
+                    ${headerHtml}
+                </div>
+            </div>
+            ${rowsHtml}
+        </div>
+    `;
 }
 
 // Vehicle options list
