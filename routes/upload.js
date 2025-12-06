@@ -139,5 +139,52 @@ router.post('/background', auth, bgUpload.single('background'), (req, res) => {
     }
 });
 
+// Configure multer for rental request photos
+const rentalPhotoStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Create rental-photos subdirectory
+        const rentalPhotosDir = path.join(uploadsDir, 'rental-photos');
+        if (!fs.existsSync(rentalPhotosDir)) {
+            fs.mkdirSync(rentalPhotosDir, { recursive: true });
+        }
+        cb(null, rentalPhotosDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'rental-' + uniqueSuffix + ext);
+    }
+});
+
+const rentalPhotoUpload = multer({
+    storage: rentalPhotoStorage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB max file size
+    },
+    fileFilter: fileFilter
+});
+
+// Upload rental request photos
+router.post('/rental-photos/:requestId', auth, rentalPhotoUpload.array('photos', 20), (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ message: 'No files uploaded' });
+        }
+        
+        // Return array of file URLs
+        const fileUrls = req.files.map(file => {
+            return `/uploads/rental-photos/${file.filename}`;
+        });
+        
+        res.json({ 
+            message: 'Photos uploaded successfully',
+            urls: fileUrls 
+        });
+    } catch (error) {
+        console.error('Rental photo upload error:', error);
+        res.status(500).json({ message: 'Error uploading photos', error: error.message });
+    }
+});
+
 module.exports = router;
 

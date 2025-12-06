@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await verifySession();
     // Update footer after session verification
     updateFooterUserInfo();
-    initConfirmDialog();
     initializeNavigation();
     initializeCookieConsent();
     initializeModals();
@@ -56,8 +55,9 @@ function formatCurrency(value) {
 }
 
 const REQUEST_STATUS_OPTIONS = [
-    { value: 'new', label: 'New request' },
+    { value: 'new', label: 'New' },
     { value: 'contacted', label: 'Client contacted' },
+    { value: 'ongoing', label: 'Ongoing process' },
     { value: 'accepted', label: 'Accepted' },
     { value: 'rejected', label: 'Rejected' },
     { value: 'closed', label: 'Closed' }
@@ -74,7 +74,6 @@ function formatRequestStatusLabel(status) {
 }
 
 const REQUESTS_PER_PAGE = 6;
-const RENTAL_CALENDAR_DAY_WIDTH = 40;
 
 const DEFAULT_BACKGROUND_OVERLAY = 'linear-gradient(180deg, rgba(1, 16, 24, 0.60), rgba(1, 48, 66, 0.35))';
 
@@ -86,158 +85,6 @@ const requestPaginationState = {
     rent: { page: 1, totalPages: 1, total: 0 },
     sale: { page: 1, totalPages: 1, total: 0 }
 };
-let rentalCalendarState = null;
-let rentalCalendarRequests = [];
-
-// Global confirm dialog state
-const confirmDialog = {
-    modal: null,
-    messageEl: null,
-    confirmBtn: null,
-    cancelBtn: null
-};
-
-function initConfirmDialog() {
-    confirmDialog.modal = document.getElementById('confirmModal');
-    confirmDialog.messageEl = document.getElementById('confirmMessage');
-    confirmDialog.confirmBtn = document.getElementById('confirmOkBtn');
-    confirmDialog.cancelBtn = document.getElementById('confirmCancelBtn');
-}
-
-function openConfirmDialog(message, confirmLabel = 'OK', cancelLabel = 'Cancel') {
-    const modal = confirmDialog.modal;
-    if (!modal || !confirmDialog.messageEl || !confirmDialog.confirmBtn || !confirmDialog.cancelBtn) {
-        // Fallback to native confirm if custom modal is not available
-        return Promise.resolve(window.confirm(message));
-    }
-
-    return new Promise((resolve) => {
-        const messageEl = confirmDialog.messageEl;
-        const confirmBtn = confirmDialog.confirmBtn;
-        const cancelBtn = confirmDialog.cancelBtn;
-
-        messageEl.textContent = message;
-        confirmBtn.textContent = confirmLabel;
-        cancelBtn.textContent = cancelLabel;
-
-        modal.style.display = 'block';
-
-        const cleanup = () => {
-            modal.style.display = 'none';
-            confirmBtn.removeEventListener('click', onConfirm);
-            cancelBtn.removeEventListener('click', onCancel);
-            modal.removeEventListener('click', onBackdrop);
-            document.removeEventListener('keydown', onKeyDown);
-        };
-
-        const onConfirm = () => {
-            cleanup();
-            resolve(true);
-        };
-
-        const onCancel = () => {
-            cleanup();
-            resolve(false);
-        };
-
-        const onBackdrop = (event) => {
-            if (event.target === modal) {
-                cleanup();
-                resolve(false);
-            }
-        };
-
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                cleanup();
-                resolve(false);
-            }
-        };
-
-        confirmBtn.addEventListener('click', onConfirm);
-        cancelBtn.addEventListener('click', onCancel);
-        modal.addEventListener('click', onBackdrop);
-        document.addEventListener('keydown', onKeyDown);
-    });
-}
-
-async function updateRequestStatus(requestId, status) {
-    if (!authToken) {
-        alert('You need to be logged in as admin to update request status.');
-        return;
-    }
-
-    const label = formatRequestStatusLabel(status) || status;
-    const confirmed = await openConfirmDialog(
-        `Change request status to "${label}"?`,
-        'Confirm',
-        'Cancel'
-    );
-    if (!confirmed) return;
-
-    try {
-        let response = await fetch(`${API_BASE}/admin/requests/${requestId}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ status })
-        });
-
-        if (await handleApiResponse(response) === false) {
-            return;
-        }
-
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-
-            // If server reports overlap when trying to accept, allow a "force" accept
-            if (response.status === 409 && status === 'accepted') {
-                const force = await openConfirmDialog(
-                    (data.message || 'This rental overlaps another accepted booking for the same car.') +
-                    '\nAccept anyway and override the existing schedule?',
-                    'Accept anyway',
-                    'Cancel'
-                );
-                if (!force) {
-                    return;
-                }
-
-                response = await fetch(`${API_BASE}/admin/requests/${requestId}/status?force=1`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ status })
-                });
-
-                if (await handleApiResponse(response) === false) {
-                    return;
-                }
-                if (!response.ok) {
-                    const retryData = await response.json().catch(() => ({}));
-                    alert(retryData.message || 'Error updating request status');
-                    return;
-                }
-            } else {
-                alert(data.message || 'Error updating request status');
-                return;
-            }
-        }
-
-        await loadClientRequests('rent');
-        await loadClientRequests('sale');
-        // Keep calendar in sync with list if visible
-        if (document.getElementById('rental-calendar')?.classList.contains('active')) {
-            await loadRentalCalendar();
-        }
-    } catch (error) {
-        console.error('Error updating request status:', error);
-        alert('Error updating request status');
-    }
-}
 
 // Navigation
 function initializeNavigation() {
@@ -350,11 +197,53 @@ function initializeNavigation() {
         });
     }
 
-    // Hamburger/X menu toggle
+    // Hamburger/X menu toggle - click still works
     menuToggle?.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleSidebar();
     });
+
+    // Open menu on hover (mouseenter)
+    let menuHoverTimeout = null;
+    
+    menuToggle?.addEventListener('mouseenter', () => {
+        // Clear any pending close timeout
+        if (menuHoverTimeout) {
+            clearTimeout(menuHoverTimeout);
+            menuHoverTimeout = null;
+        }
+        // Open menu if not already open
+        if (!document.body.classList.contains('menu-open')) {
+            openSidebar();
+        }
+    });
+
+    // Close menu when mouse leaves menu area (both sidebar and toggle button)
+    // Create a wrapper element to detect mouse leaving the entire menu area
+    function handleMenuMouseLeave() {
+        menuHoverTimeout = setTimeout(() => {
+            if (document.body.classList.contains('menu-open')) {
+                closeSidebar();
+            }
+            menuHoverTimeout = null;
+        }, 150); // Small delay to allow mouse to move between toggle and sidebar
+    }
+
+    function handleMenuMouseEnter() {
+        // Clear any pending close timeout when mouse enters menu area
+        if (menuHoverTimeout) {
+            clearTimeout(menuHoverTimeout);
+            menuHoverTimeout = null;
+        }
+    }
+
+    // Add mouseleave to both toggle button and sidebar
+    menuToggle?.addEventListener('mouseleave', handleMenuMouseLeave);
+    sidebar?.addEventListener('mouseleave', handleMenuMouseLeave);
+    
+    // Add mouseenter to both to cancel close when moving between them
+    menuToggle?.addEventListener('mouseenter', handleMenuMouseEnter);
+    sidebar?.addEventListener('mouseenter', handleMenuMouseEnter);
 
     // Close sidebar on ESC key
     document.addEventListener('keydown', (e) => {
@@ -611,6 +500,97 @@ function openModal(modalId) {
 window.closeModal = closeModal;
 window.openModal = openModal;
 
+// Custom Confirmation Modal Functions
+let confirmationResolve = null;
+
+function showCustomConfirm(title, message, details = null, iconType = 'warning') {
+    return new Promise((resolve) => {
+        confirmationResolve = resolve;
+        
+        const modal = document.getElementById('confirmationModal');
+        const modalTitle = document.getElementById('confirmationModalTitle');
+        const modalMessage = document.getElementById('confirmationModalMessage');
+        const modalDetails = document.getElementById('confirmationModalDetails');
+        const modalIcon = document.getElementById('confirmationModalIcon');
+        const confirmBtn = document.getElementById('confirmationModalConfirm');
+        const cancelBtn = document.getElementById('confirmationModalCancel');
+        const closeBtn = document.getElementById('confirmationModalClose');
+        
+        // Set content
+        modalTitle.textContent = title || 'Confirm Action';
+        modalMessage.textContent = message || '';
+        
+        // Set icon type
+        modalIcon.className = `custom-modal-icon ${iconType}`;
+        
+        // Set details if provided
+        if (details && Array.isArray(details) && details.length > 0) {
+            modalDetails.innerHTML = '<ul>' + details.map(detail => `<li>${detail}</li>`).join('') + '</ul>';
+            modalDetails.style.display = 'block';
+        } else {
+            modalDetails.style.display = 'none';
+        }
+        
+        // Remove previous event listeners by cloning
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        const newCloseBtn = closeBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        
+        // Add new event listeners
+        newConfirmBtn.addEventListener('click', () => {
+            hideCustomConfirm();
+            if (confirmationResolve) {
+                confirmationResolve(true);
+                confirmationResolve = null;
+            }
+        });
+        
+        newCancelBtn.addEventListener('click', () => {
+            hideCustomConfirm();
+            if (confirmationResolve) {
+                confirmationResolve(false);
+                confirmationResolve = null;
+            }
+        });
+        
+        newCloseBtn.addEventListener('click', () => {
+            hideCustomConfirm();
+            if (confirmationResolve) {
+                confirmationResolve(false);
+                confirmationResolve = null;
+            }
+        });
+        
+        // Close on backdrop click
+        modal.addEventListener('click', function backdropClick(e) {
+            if (e.target === modal) {
+                hideCustomConfirm();
+                modal.removeEventListener('click', backdropClick);
+                if (confirmationResolve) {
+                    confirmationResolve(false);
+                    confirmationResolve = null;
+                }
+            }
+        });
+        
+        // Show modal
+        modal.classList.add('active');
+    });
+}
+
+function hideCustomConfirm() {
+    const modal = document.getElementById('confirmationModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Note: We don't override window.confirm/alert globally because they're synchronous
+// but our custom modal is async. Use showCustomConfirm directly in async functions.
+
 // Load Cars for Sale
 async function loadCarsForSale() {
     try {
@@ -760,6 +740,17 @@ async function showCarDetails(carId, type) {
                 <div class="request-form-row">
                     <input type="date" name="startDate" required>
                     <input type="date" name="endDate" required>
+                </div>
+                <div class="request-form-row">
+                    <label for="fuelLevel" style="display: block; margin-bottom: 8px; color: rgba(255,255,255,0.9); font-size: 0.9rem;">Fuel Level at Rental Start</label>
+                    <select name="fuelLevel" id="fuelLevel" required style="width: 100%; padding: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; color: var(--text-white);">
+                        <option value="">Select fuel level</option>
+                        <option value="Empty">Empty</option>
+                        <option value="1/4">1/4 Full</option>
+                        <option value="1/2">1/2 Full</option>
+                        <option value="3/4">3/4 Full</option>
+                        <option value="Full">Full</option>
+                    </select>
                 </div>
             `
             : '';
@@ -1016,6 +1007,104 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
     }
 });
 
+// Contact Form Submission
+document.getElementById('contactForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const form = e.target;
+    const name = document.getElementById('contactName').value.trim();
+    const email = document.getElementById('contactEmailInput').value.trim();
+    const subject = document.getElementById('contactSubject').value.trim();
+    const message = document.getElementById('contactMessage').value.trim();
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    // Reset any previous error states
+    const existingError = form.querySelector('.contact-form-error');
+    if (existingError) {
+        existingError.remove();
+    }
+    const existingSuccess = form.querySelector('.contact-form-success');
+    if (existingSuccess) {
+        existingSuccess.remove();
+    }
+
+    // Basic validation
+    if (!name || !email || !subject || !message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'contact-form-error';
+        errorDiv.textContent = 'Please fill in all fields.';
+        errorDiv.style.color = '#ff6b6b';
+        errorDiv.style.marginTop = '10px';
+        form.appendChild(errorDiv);
+        return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'contact-form-error';
+        errorDiv.textContent = 'Please enter a valid email address.';
+        errorDiv.style.color = '#ff6b6b';
+        errorDiv.style.marginTop = '10px';
+        form.appendChild(errorDiv);
+        return;
+    }
+
+    // Disable submit button
+    const originalButtonText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Sending...';
+
+    try {
+        const response = await fetch(`${API_BASE}/contact`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, subject, message })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Show success message
+            const successDiv = document.createElement('div');
+            successDiv.className = 'contact-form-success';
+            successDiv.textContent = 'Thank you! Your message has been sent successfully.';
+            successDiv.style.color = '#51cf66';
+            successDiv.style.marginTop = '10px';
+            form.appendChild(successDiv);
+            
+            // Reset form
+            form.reset();
+            
+            // Remove success message after 5 seconds
+            setTimeout(() => {
+                successDiv.remove();
+            }, 5000);
+        } else {
+            // Show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'contact-form-error';
+            errorDiv.textContent = data.message || 'Failed to send message. Please try again.';
+            errorDiv.style.color = '#ff6b6b';
+            errorDiv.style.marginTop = '10px';
+            form.appendChild(errorDiv);
+        }
+    } catch (error) {
+        console.error('Error submitting contact form:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'contact-form-error';
+        errorDiv.textContent = 'Unable to send message. Please try again later.';
+        errorDiv.style.color = '#ff6b6b';
+        errorDiv.style.marginTop = '10px';
+        form.appendChild(errorDiv);
+    } finally {
+        // Re-enable submit button
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+    }
+});
+
 // Admin Dashboard
 function initializeAdmin() {
     // Admin navigation - handle both regular buttons and icon buttons
@@ -1050,10 +1139,11 @@ function initializeAdmin() {
                         loadAdminCars('sale');
                     } else if (section === 'manage-rent') {
                         loadAdminCars('rent');
-                    } else if (section === 'sale-requests') {
+                    } else if (section === 'rental-requests') {
+                        initializeRentalCalendarView();
+                        loadClientRequests('rent');
+                    } else if (section === 'client-requests') {
                         loadClientRequests('sale');
-                    } else if (section === 'rental-calendar') {
-                        loadRentalCalendar();
                     } else if (section === 'dashboard') {
                         // Always reload stats when dashboard section is shown
                         // Use double setTimeout to ensure DOM has fully updated
@@ -1316,6 +1406,10 @@ function populateSiteSettingsForm(settings) {
     }
 
     document.getElementById('containerTextColor').value = settings.containerTextColor || '#e6eef2';
+    
+    // Set contract terms
+    document.getElementById('contractTerms').value = settings.contractTerms || '';
+    document.getElementById('salesContractTerms').value = settings.salesContractTerms || '';
 }
 
 async function handleSiteSettingsSubmit(e) {
@@ -1337,7 +1431,9 @@ async function handleSiteSettingsSubmit(e) {
         menuAccentColor: document.getElementById('menuAccentColor').value,
         containerBackgroundColor: document.getElementById('containerBackgroundColorText').value || document.getElementById('containerBackgroundColor').value,
         containerBorderColor: document.getElementById('containerBorderColorText').value || document.getElementById('containerBorderColor').value,
-        containerTextColor: document.getElementById('containerTextColor').value
+        containerTextColor: document.getElementById('containerTextColor').value,
+        contractTerms: document.getElementById('contractTerms').value,
+        salesContractTerms: document.getElementById('salesContractTerms').value
     };
 
     try {
@@ -1479,8 +1575,14 @@ function applySiteSettings(settings) {
     updateFooterUserInfo();
 }
 
-function resetSiteSettings() {
-    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+async function resetSiteSettings() {
+    const confirmed = await showCustomConfirm(
+        'Reset Settings',
+        'Are you sure you want to reset all settings to defaults? This cannot be undone.',
+        null,
+        'warning'
+    );
+    if (confirmed) {
         document.getElementById('siteSettingsForm').reset();
         document.getElementById('logoUrl').value = '';
         document.getElementById('backgroundImageUrl').value = '';
@@ -1971,10 +2073,9 @@ function displayClientRequests(result, type) {
             ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
             : null;
 
-        const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
-        const normalizedStatus = validStatuses.includes(request.status)
+        const normalizedStatus = ['new', 'contacted', 'ongoing', 'accepted', 'rejected', 'closed'].includes(request.status)
             ? request.status
-            : 'new';
+            : (request.status === 'pending' ? 'new' : request.status === 'completed' ? 'closed' : 'new');
         const statusLabel = formatRequestStatusLabel(normalizedStatus);
         const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
             <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
@@ -1987,7 +2088,7 @@ function displayClientRequests(result, type) {
             : '';
 
         return `
-            <div class="request-card request-card-clickable" onclick="openRequestById('${request._id}')">
+            <div class="request-card">
                 <div class="request-card-header">
                     <div class="request-card-title">
                         <span class="request-car-name">${escapeHtml(carName)}</span>
@@ -2017,14 +2118,50 @@ function displayClientRequests(result, type) {
                             <span class="request-meta-label">Rental window</span>
                             <span class="request-meta-value">${escapeHtml(rentalDates)}</span>
                         </div>` : ''}
+                    ${(() => {
+                        // Calculate and display price for both rental and sale requests
+                        let priceHtml = '';
+                        if (type === 'rent' && request.startDate && request.endDate) {
+                            const start = new Date(request.startDate);
+                            const end = new Date(request.endDate);
+                            const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+                            let basePrice = request.customPrice !== null && request.customPrice !== undefined 
+                                ? request.customPrice 
+                                : (car.dailyRate ? car.dailyRate * days : 0);
+                            const discountAmount = basePrice * ((request.discountPercent || 0) / 100);
+                            const totalPrice = basePrice - discountAmount;
+                            if (totalPrice > 0) {
+                                priceHtml = `
+                                    <div class="request-meta-item">
+                                        <span class="request-meta-label">Total Price</span>
+                                        <span class="request-meta-value request-price">${formatCurrency(totalPrice)}</span>
+                                    </div>`;
+                            }
+                        } else if (type === 'sale') {
+                            let basePrice = request.customPrice !== null && request.customPrice !== undefined 
+                                ? request.customPrice 
+                                : (car.price || 0);
+                            const discountAmount = basePrice * ((request.discountPercent || 0) / 100);
+                            const totalPrice = basePrice - discountAmount;
+                            if (totalPrice > 0) {
+                                priceHtml = `
+                                    <div class="request-meta-item">
+                                        <span class="request-meta-label">Sale Price</span>
+                                        <span class="request-meta-value request-price">${formatCurrency(totalPrice)}</span>
+                                    </div>`;
+                            }
+                        }
+                        return priceHtml;
+                    })()}
                 </div>
                 ${messageHtml}
                 <div class="request-actions">
+                    <button class="btn-primary" onclick="showRequestDetails('${request._id}', '${type}')" style="margin-right: 10px;">View Details</button>
                     <label for="status-${request._id}">Update status</label>
-                    <select id="status-${request._id}" class="request-status-select" onchange="event.stopPropagation(); updateRequestStatus('${request._id}', this.value)">
+                    <select id="status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
                         ${statusOptions}
                     </select>
-                    <button class="btn-delete" data-delete-request-id="${request._id}" onclick="event.stopPropagation(); deleteRequest('${request._id}', '${type}')">Delete</button>
+                    <button class="btn-delete" onclick="deleteRequest('${request._id}', '${type}')">Delete</button>
                 </div>
             </div>
         `;
@@ -2077,35 +2214,203 @@ function changeRequestPage(type, direction) {
     loadClientRequests(type);
 }
 
+async function updateRequestStatus(requestId, newStatus, forceAccept = false) {
+    if (!authToken) {
+        alert('You need to be logged in as admin to update request status.');
+        return;
+    }
+
+    // Check for overlapping accepted requests if trying to accept
+    if (newStatus === 'accepted' && !forceAccept) {
+        try {
+            // First, get the current request details
+            const requestResponse = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            if (!requestResponse.ok) {
+                alert('Error loading request details');
+                return;
+            }
+
+            const currentRequest = await requestResponse.json();
+            
+            // Only check overlaps for rental requests with dates
+            if (currentRequest.requestType === 'rent' && currentRequest.startDate && currentRequest.endDate) {
+                // Check for overlapping accepted requests
+                const overlapResponse = await fetch(`${API_BASE}/admin/requests/${requestId}/check-overlap`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (overlapResponse.ok) {
+                    const overlapData = await overlapResponse.json();
+                    if (overlapData.hasOverlap && overlapData.conflictingRequests && overlapData.conflictingRequests.length > 0) {
+                        // Build conflict message
+                        const conflictDetails = overlapData.conflictingRequests.map(req => {
+                            const carName = req.carId ? 
+                                `${req.carId.year || ''} ${req.carId.brand || req.carId.make || ''} ${req.carId.model || ''}`.trim() : 
+                                'Unknown Car';
+                            const startDate = new Date(req.startDate).toLocaleDateString();
+                            const endDate = new Date(req.endDate).toLocaleDateString();
+                            return `\n- ${req.clientName} (${startDate} to ${endDate})`;
+                        }).join('');
+
+                        const conflictTitle = 'Overlapping Accepted Request';
+                        const conflictMessage = `WARNING: This request overlaps with ${overlapData.conflictingRequests.length} already accepted request(s) for the same car.`;
+                        const conflictDetailsList = overlapData.conflictingRequests.map(req => {
+                            const startDate = new Date(req.startDate).toLocaleDateString();
+                            const endDate = new Date(req.endDate).toLocaleDateString();
+                            return `${req.clientName} (${startDate} to ${endDate})`;
+                        });
+                        
+                        const forceConfirm = await showCustomConfirm(
+                            conflictTitle,
+                            conflictMessage,
+                            conflictDetailsList,
+                            'warning'
+                        );
+                        if (!forceConfirm) {
+                            // Reset dropdown to previous value
+                            const selectElement = document.getElementById(`status-${requestId}`);
+                            if (selectElement) {
+                                // Find the previous status from the request card
+                                const requestCard = selectElement.closest('.request-card');
+                                if (requestCard) {
+                                    const statusBadge = requestCard.querySelector('.request-status-badge');
+                                    if (statusBadge) {
+                                        // Try to get previous status from class or data attribute
+                                        const prevStatus = currentRequest.status || 'new';
+                                        selectElement.value = prevStatus;
+                                    }
+                                }
+                            }
+                            return;
+                        }
+                        // Proceed with force accept
+                        forceAccept = true;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking overlaps:', error);
+            // Continue with status update even if overlap check fails
+        }
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ status: newStatus, force: forceAccept })
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (response.ok) {
+            const updatedRequest = await response.json();
+            const requestType = updatedRequest?.requestType || 'rent';
+            
+            // Reload the requests list
+            loadClientRequests(requestType);
+            
+            // Reload calendar view if it's a rental request and calendar is visible
+            const rentalRequestsSection = document.getElementById('rental-requests');
+            const calendarView = document.getElementById('rental-calendar-view');
+            if (requestType === 'rent' && rentalRequestsSection && rentalRequestsSection.style.display !== 'none') {
+                if (calendarView && calendarView.style.display !== 'none') {
+                    loadRentalCalendarView();
+                }
+            }
+            
+            // Reload dashboard stats
+            loadDashboardStats();
+        } else {
+            const data = await response.json().catch(() => ({}));
+            
+            // Handle overlap conflict from backend
+            if (response.status === 409 && data.conflictingRequests && data.conflictingRequests.length > 0) {
+                const conflictDetails = data.conflictingRequests.map(req => {
+                    const carName = req.carId ? 
+                        `${req.carId.year || ''} ${req.carId.brand || req.carId.make || ''} ${req.carId.model || ''}`.trim() : 
+                        'Unknown Car';
+                    const startDate = new Date(req.startDate).toLocaleDateString();
+                    const endDate = new Date(req.endDate).toLocaleDateString();
+                    return `\n- ${req.clientName} (${startDate} to ${endDate})`;
+                }).join('');
+
+                const conflictTitle = 'Overlapping Accepted Request';
+                const conflictMessage = `WARNING: This request overlaps with ${data.conflictingRequests.length} already accepted request(s) for the same car.`;
+                const conflictDetailsList = data.conflictingRequests.map(req => {
+                    const startDate = new Date(req.startDate).toLocaleDateString();
+                    const endDate = new Date(req.endDate).toLocaleDateString();
+                    return `${req.clientName} (${startDate} to ${endDate})`;
+                });
+                
+                const forceConfirm = await showCustomConfirm(
+                    conflictTitle,
+                    conflictMessage,
+                    conflictDetailsList,
+                    'warning'
+                );
+                if (forceConfirm) {
+                    // Retry with force flag
+                    return updateRequestStatus(requestId, newStatus, true);
+                } else {
+                    // Reset dropdown to previous value
+                    const selectElement = document.getElementById(`status-${requestId}`);
+                    if (selectElement) {
+                        // Try to get the current request status
+                        try {
+                            const requestResponse = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
+                                headers: {
+                                    'Authorization': `Bearer ${authToken}`
+                                }
+                            });
+                            if (requestResponse.ok) {
+                                const currentRequest = await requestResponse.json();
+                                selectElement.value = currentRequest.status || 'new';
+                            }
+                        } catch (e) {
+                            console.error('Error resetting dropdown:', e);
+                        }
+                    }
+                    return;
+                }
+            }
+            
+            alert(data.message || 'Error updating request status');
+        }
+    } catch (error) {
+        console.error('Error updating request status:', error);
+        alert('Error updating request status');
+    }
+}
+
+// Make updateRequestStatus globally accessible for onclick handlers
+window.updateRequestStatus = updateRequestStatus;
+
 async function deleteRequest(requestId, type) {
     if (!authToken) {
         alert('You need to be logged in as admin to delete requests.');
         return;
     }
 
-    // Disable all delete buttons for this request
-    const deleteButtons = document.querySelectorAll(`button[data-delete-request-id="${requestId}"]`);
-    deleteButtons.forEach(btn => {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.cursor = 'not-allowed';
-    });
-
-    const confirmed = await openConfirmDialog(
-        'Delete this request? This action cannot be undone.',
-        'Delete',
-        'Cancel'
+    const confirmed = await showCustomConfirm(
+        'Delete Request',
+        'Are you sure you want to delete this request? This action cannot be undone.',
+        null,
+        'danger'
     );
-    
-    if (!confirmed) {
-        // Re-enable buttons if user cancelled
-        deleteButtons.forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '';
-            btn.style.cursor = '';
-        });
-        return;
-    }
+    if (!confirmed) return;
 
     try {
         const response = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
@@ -2116,12 +2421,6 @@ async function deleteRequest(requestId, type) {
         });
 
         if (await handleApiResponse(response) === false) {
-            // Re-enable buttons on error
-            deleteButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                btn.style.cursor = '';
-            });
             return;
         }
 
@@ -2130,431 +2429,17 @@ async function deleteRequest(requestId, type) {
             const deletedType = data?.request?.requestType || type;
             loadClientRequests(deletedType);
             loadDashboardStats();
-            // Keep buttons disabled - request is deleted
         } else {
             alert('Error deleting request');
-            // Re-enable buttons on error
-            deleteButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                btn.style.cursor = '';
-            });
         }
     } catch (error) {
         console.error('Error deleting request:', error);
         alert('Error deleting request');
-        // Re-enable buttons on error
-        deleteButtons.forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '';
-            btn.style.cursor = '';
-        });
     }
 }
 
-// -------- Rental Requests Calendar (tableau) --------
-
-async function openRequestById(id) {
-    if (!authToken) return;
-    try {
-        const response = await fetch(`${API_BASE}/admin/requests/${id}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (await handleApiResponse(response) === false) return;
-        if (!response.ok) {
-            alert('Error loading request details');
-            return;
-        }
-        const request = await response.json();
-        openRequestDetailModal(request);
-    } catch (error) {
-        console.error('Error loading request details:', error);
-        alert('Error loading request details');
-    }
-}
-
-function renderRequestDetailCard(request) {
-    const car = request.carId || {};
-    const carNameParts = [
-        car.year,
-        car.brand || car.make,
-        car.model
-    ].filter(Boolean);
-    const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle';
-
-    const type = request.requestType === 'rent' ? 'rent' : 'sale';
-    const submittedAt = request.createdAt ? new Date(request.createdAt).toLocaleString() : '—';
-    const rentalWindow = type === 'rent' && request.startDate && request.endDate
-        ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
-        : '—';
-
-    const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
-    const normalizedStatus = validStatuses.includes(request.status)
-        ? request.status
-        : 'new';
-    const statusLabel = formatRequestStatusLabel(normalizedStatus);
-    const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
-        <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
-            ${option.label}
-        </option>
-    `).join('');
-
-    const messageHtml = request.message
-        ? `<div class="request-message">${escapeHtml(request.message).replace(/\n/g, '<br>')}</div>`
-        : '';
-
-    return `
-        <div class="request-card">
-            <div class="request-card-header">
-                <div class="request-card-title">
-                    <span class="request-car-name">${escapeHtml(carName)}</span>
-                    <span class="request-type-badge ${type}">${type === 'rent' ? 'Rental request' : 'Sale request'}</span>
-                </div>
-                <span class="request-status-badge ${normalizedStatus}">${escapeHtml(statusLabel)}</span>
-            </div>
-            <div class="request-meta-grid">
-                <div class="request-meta-item">
-                    <span class="request-meta-label">Client</span>
-                    <span class="request-meta-value">${escapeHtml(request.clientName || '')}</span>
-                </div>
-                <div class="request-meta-item">
-                    <span class="request-meta-label">Email</span>
-                    <span class="request-meta-value">${escapeHtml(request.clientEmail || '')}</span>
-                </div>
-                <div class="request-meta-item">
-                    <span class="request-meta-label">Phone</span>
-                    <span class="request-meta-value">${escapeHtml(request.clientPhone || '')}</span>
-                </div>
-                <div class="request-meta-item">
-                    <span class="request-meta-label">Submitted</span>
-                    <span class="request-meta-value">${escapeHtml(submittedAt)}</span>
-                </div>
-                ${type === 'rent' ? `
-                <div class="request-meta-item">
-                    <span class="request-meta-label">Rental window</span>
-                    <span class="request-meta-value">${escapeHtml(rentalWindow)}</span>
-                </div>` : ''}
-            </div>
-            ${messageHtml}
-            <div class="request-actions">
-                <label for="modal-status-${request._id}">Update status</label>
-                <select id="modal-status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
-                    ${statusOptions}
-                </select>
-                <button class="btn-delete" data-delete-request-id="${request._id}" onclick="deleteRequest('${request._id}', '${type}')">Delete</button>
-            </div>
-        </div>
-    `;
-}
-
-function openRequestDetailModal(request) {
-    const modal = document.getElementById('requestDetailModal');
-    const body = document.getElementById('requestDetailBody');
-    if (!modal || !body) return;
-    body.innerHTML = renderRequestDetailCard(request);
-    modal.style.display = 'block';
-}
-
-function closeRequestDetailModal() {
-    const modal = document.getElementById('requestDetailModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-document.getElementById('closeRequestDetailModal')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeRequestDetailModal();
-});
-
-window.addEventListener('click', (e) => {
-    const modal = document.getElementById('requestDetailModal');
-    if (e.target === modal) {
-        closeRequestDetailModal();
-    }
-});
-
-async function loadRentalCalendar() {
-    if (!authToken) return;
-
-    const container = document.getElementById('rentalCalendarContainer');
-    if (!container) return;
-    container.innerHTML = 'Loading rental requests…';
-
-    try {
-        const headers = { 'Authorization': `Bearer ${authToken}` };
-        // Use a higher limit so the calendar can show a reasonable history
-        const params = new URLSearchParams({
-            type: 'rent',
-            page: '1',
-            limit: '500'
-        });
-
-        const response = await fetch(`${API_BASE}/admin/requests?${params.toString()}`, { headers });
-        if (await handleApiResponse(response) === false) {
-            return;
-        }
-        if (!response.ok) {
-            container.innerHTML = '<p class="request-empty">Error loading rental requests.</p>';
-            return;
-        }
-
-        const result = normalizeRequestResult(await response.json());
-        rentalCalendarRequests = Array.isArray(result.data) ? result.data : [];
-        if (!rentalCalendarState) {
-            const today = new Date();
-            rentalCalendarState = { year: today.getFullYear(), month: today.getMonth() + 1 };
-        }
-        renderRentalCalendarFromRequests();
-        initRentalCalendarNav();
-    } catch (error) {
-        console.error('Error loading rental calendar:', error);
-        container.innerHTML = '<p class="request-empty">Error loading rental calendar.</p>';
-    }
-}
-
-function initRentalCalendarNav() {
-    if (window.rentalCalendarNavInitialized) return;
-    window.rentalCalendarNavInitialized = true;
-
-    const prevBtn = document.getElementById('rentalCalendarPrevBtn');
-    const nextBtn = document.getElementById('rentalCalendarNextBtn');
-
-    prevBtn?.addEventListener('click', () => changeRentalCalendarMonth(-1));
-    nextBtn?.addEventListener('click', () => changeRentalCalendarMonth(1));
-}
-
-function changeRentalCalendarMonth(delta) {
-    const base = rentalCalendarState || (() => {
-        const t = new Date();
-        return { year: t.getFullYear(), month: t.getMonth() + 1 };
-    })();
-
-    const target = new Date(base.year, base.month - 1 + delta, 1);
-    rentalCalendarState = {
-        year: target.getFullYear(),
-        month: target.getMonth() + 1
-    };
-
-    renderRentalCalendarFromRequests();
-}
-
-function renderRentalCalendarFromRequests() {
-    const container = document.getElementById('rentalCalendarContainer');
-    if (!container) return;
-
-    if (!Array.isArray(rentalCalendarRequests) || rentalCalendarRequests.length === 0) {
-        container.innerHTML = '<p class="request-empty">No rental requests yet.</p>';
-        const monthLabel = document.getElementById('rentalCalendarMonthLabel');
-        if (monthLabel && rentalCalendarState) {
-            const d = new Date(rentalCalendarState.year, rentalCalendarState.month - 1, 1);
-            monthLabel.textContent = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-        }
-        return;
-    }
-
-    const today = new Date();
-    const state = rentalCalendarState || { year: today.getFullYear(), month: today.getMonth() + 1 };
-    rentalCalendarState = state;
-
-    const { year, month } = state;
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0); // last day of month
-    monthEnd.setHours(23, 59, 59, 999);
-
-    const monthLabel = document.getElementById('rentalCalendarMonthLabel');
-    if (monthLabel) {
-        monthLabel.textContent = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    }
-
-    // Build list of days in the month
-    const days = [];
-    const dayDates = [];
-    const daysInMonth = monthEnd.getDate();
-    for (let d = 1; d <= daysInMonth; d++) {
-        const date = new Date(year, month - 1, d);
-        days.push(date.toISOString().slice(0, 10));
-        dayDates.push(date);
-    }
-
-    // Group requests by car
-    const carsMap = new Map();
-    const validStatuses = ['new', 'contacted', 'accepted', 'rejected', 'closed'];
-    rentalCalendarRequests.forEach(request => {
-        const car = request.carId || {};
-        const carNameParts = [
-            car.year,
-            car.brand || car.make,
-            car.model
-        ].filter(Boolean);
-        const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle';
-        const carKey = car._id || request.carId || carName;
-
-        // Normalize dates
-        if (!request.startDate || !request.endDate) return;
-        const rs = new Date(request.startDate);
-        const re = new Date(request.endDate);
-        rs.setHours(0, 0, 0, 0);
-        re.setHours(0, 0, 0, 0);
-
-        // Only include requests that overlap this month
-        if (rs > monthEnd || re < monthStart) return;
-
-        if (!carsMap.has(carKey)) {
-            carsMap.set(carKey, { name: carName, requests: [] });
-        }
-        const status = validStatuses.includes(request.status) ? request.status : 'new';
-        carsMap.get(carKey).requests.push({
-            id: request._id,
-            startDate: rs,
-            endDate: re,
-            status,
-            clientName: request.clientName,
-            clientEmail: request.clientEmail
-        });
-    });
-
-    const cars = Array.from(carsMap.values());
-    if (cars.length === 0) {
-        container.innerHTML = '<p class="request-empty">No rental requests for this month.</p>';
-        return;
-    }
-
-    // Build header
-    const headerHtml = dayDates.map(d => {
-        const dayNum = d.getDate();
-        const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
-        const isToday =
-            d.getFullYear() === today.getFullYear() &&
-            d.getMonth() === today.getMonth() &&
-            d.getDate() === today.getDate();
-        const classes = ['calendar-day-label'];
-        if (isToday) classes.push('today');
-        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-        if (isWeekend) classes.push('weekend');
-
-        return `
-            <div class="${classes.join(' ')}">
-                <span class="day-num">${dayNum}</span>
-                <span class="day-short">${weekday}</span>
-            </div>
-        `;
-    }).join('');
-
-    const gridTemplate = `grid-template-columns: repeat(${days.length}, ${RENTAL_CALENDAR_DAY_WIDTH}px);`;
-
-    const rowsHtml = cars.map(car => {
-        const requests = (car.requests || []).slice().sort((a, b) => a.startDate - b.startDate);
-
-        // Layout requests into lanes (subrows) to avoid overlaps
-        const lanes = [];
-        const BAR_HEIGHT = 20;
-        const BAR_GAP = 6;
-        const TOP_PADDING = 6;
-
-        requests.forEach(req => {
-            let laneIndex = 0;
-            // find first lane where this request does not overlap any existing request
-            while (true) {
-                const lane = lanes[laneIndex] || [];
-                const overlaps = lane.some(other =>
-                    !(req.endDate <= other.startDate || req.startDate >= other.endDate)
-                );
-                if (!overlaps) {
-                    req.lane = laneIndex;
-                    lane.push(req);
-                    if (!lanes[laneIndex]) {
-                        lanes[laneIndex] = lane;
-                    }
-                    break;
-                }
-                laneIndex++;
-            }
-        });
-
-        const laneCount = Math.max(1, lanes.length || 1);
-        const gridHeight = TOP_PADDING + laneCount * (BAR_HEIGHT + BAR_GAP);
-
-        const barsHtml = requests.map(req => {
-            let startIdx = -1;
-            let endIdx = -1;
-            dayDates.forEach((d, idx) => {
-                const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                const nextDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-                if (req.startDate < nextDay && req.endDate >= dayStart) {
-                    if (startIdx === -1) startIdx = idx;
-                    endIdx = idx;
-                }
-            });
-            if (startIdx === -1 || endIdx === -1) return '';
-
-            const status = req.status || 'new';
-            let barClass = 'calendar-bar-new';
-            if (status === 'accepted') {
-                barClass = 'calendar-bar-accepted';
-            } else if (status === 'rejected') {
-                barClass = 'calendar-bar-rejected';
-            } else if (status === 'closed') {
-                barClass = 'calendar-bar-closed';
-            } else if (status === 'contacted') {
-                barClass = 'calendar-bar-contacted';
-            }
-
-            const defaultLabel = status === 'accepted'
-                ? 'Accepted'
-                : status === 'rejected'
-                    ? 'Rejected'
-                    : status === 'closed'
-                        ? 'Closed'
-                        : 'Request';
-            const label = (req.clientName || '').split(' ')[0] || defaultLabel;
-            const tooltipParts = [
-                req.clientName || '',
-                req.clientEmail || '',
-                `${req.startDate.toLocaleDateString()} → ${req.endDate.toLocaleDateString()}`
-            ].filter(Boolean);
-            const tooltip = tooltipParts.join(' · ');
-
-            const dayWidth = RENTAL_CALENDAR_DAY_WIDTH;
-            const leftPx = (startIdx + 0.5) * dayWidth;
-            const rightPx = (endIdx + 0.5) * dayWidth;
-            const widthPx = Math.max(dayWidth * 0.6, rightPx - leftPx);
-            const laneIndex = typeof req.lane === 'number' ? req.lane : 0;
-            const topPx = TOP_PADDING + laneIndex * (BAR_HEIGHT + BAR_GAP);
-
-            return `
-                <div class="calendar-request-bar ${barClass}"
-                     style="left: ${leftPx}px; width: ${widthPx}px; top: ${topPx}px;"
-                     title="${escapeHtml(tooltip)}"
-                     data-request-id="${req.id}"
-                     onclick="openRequestById('${req.id}')">
-                    <span>${escapeHtml(label)}</span>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="rental-calendar-row">
-                <div class="rental-calendar-car">${escapeHtml(car.name)}</div>
-                <div class="rental-calendar-grid" style="${gridTemplate} height: ${gridHeight}px;">
-                    ${barsHtml || ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    container.innerHTML = `
-        <div class="rental-calendar-table">
-            <div class="rental-calendar-header-row">
-                <div class="rental-calendar-car-header">Car</div>
-                <div class="rental-calendar-grid header" style="${gridTemplate}">
-                    ${headerHtml}
-                </div>
-            </div>
-            ${rowsHtml}
-        </div>
-    `;
-}
+// Make deleteRequest globally accessible for onclick handlers
+window.deleteRequest = deleteRequest;
 
 // Vehicle options list
 const VEHICLE_OPTIONS = [
@@ -3231,7 +3116,13 @@ async function editCar(carId, type) {
 }
 
 async function deleteCar(carId, type) {
-    if (!confirm('Are you sure you want to delete this car?')) return;
+    const confirmed = await showCustomConfirm(
+        'Delete Car',
+        'Are you sure you want to delete this car? This action cannot be undone.',
+        null,
+        'danger'
+    );
+    if (!confirmed) return;
 
     try {
         const response = await fetch(`${API_BASE}/cars/${carId}`, {
@@ -3304,5 +3195,1229 @@ function updateContactPageWithSettings(settings = {}) {
         bringMeHereBtn.setAttribute('data-address', address);
     }
 }
+
+// Rental Calendar View
+// Initialize calendar month to current month (1st day of current month)
+let currentCalendarMonth = new Date();
+currentCalendarMonth.setDate(1);
+currentCalendarMonth.setHours(0, 0, 0, 0);
+let calendarRentalRequests = [];
+let calendarCars = [];
+
+function initializeRentalCalendarView() {
+    // View toggle buttons
+    const calendarViewBtn = document.getElementById('calendarViewBtn');
+    const listViewBtn = document.getElementById('listViewBtn');
+    const calendarView = document.getElementById('rental-calendar-view');
+    const listView = document.getElementById('rental-list-view');
+
+    if (calendarViewBtn && listViewBtn) {
+        calendarViewBtn.addEventListener('click', () => {
+            calendarViewBtn.classList.add('active');
+            listViewBtn.classList.remove('active');
+            if (calendarView) calendarView.style.display = 'block';
+            if (listView) listView.style.display = 'none';
+            loadRentalCalendarView();
+        });
+
+        listViewBtn.addEventListener('click', () => {
+            listViewBtn.classList.add('active');
+            calendarViewBtn.classList.remove('active');
+            if (calendarView) calendarView.style.display = 'none';
+            if (listView) listView.style.display = 'block';
+        });
+    }
+
+    // Month navigation
+    const prevMonthBtn = document.getElementById('prevMonthBtn');
+    const nextMonthBtn = document.getElementById('nextMonthBtn');
+
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => {
+            const year = currentCalendarMonth.getFullYear();
+            const month = currentCalendarMonth.getMonth();
+            // Create new date for previous month, ensuring it's the 1st day
+            currentCalendarMonth = new Date(year, month - 1, 1);
+            currentCalendarMonth.setHours(0, 0, 0, 0);
+            loadRentalCalendarView();
+        });
+    }
+
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => {
+            const year = currentCalendarMonth.getFullYear();
+            const month = currentCalendarMonth.getMonth();
+            // Create new date for next month, ensuring it's the 1st day
+            currentCalendarMonth = new Date(year, month + 1, 1);
+            currentCalendarMonth.setHours(0, 0, 0, 0);
+            loadRentalCalendarView();
+        });
+    }
+
+    // Initial load
+    loadRentalCalendarView();
+}
+
+async function loadRentalCalendarView() {
+    if (!authToken) {
+        const tableauContainer = document.getElementById('rentalCalendarTableau');
+        if (tableauContainer) {
+            tableauContainer.innerHTML = '<div class="calendar-error">Please log in to view the calendar.</div>';
+        }
+        return;
+    }
+
+    const tableauContainer = document.getElementById('rentalCalendarTableau');
+    if (!tableauContainer) return;
+
+    tableauContainer.innerHTML = '<div class="calendar-loading">Loading calendar...</div>';
+
+    try {
+        // Load all rental cars (this endpoint may not require auth, but sending it doesn't hurt)
+        let carsResponse;
+        try {
+            carsResponse = await fetch(`${API_BASE}/cars/rent`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+        } catch (fetchError) {
+            console.error('Network error fetching cars:', fetchError);
+            throw new Error('Unable to connect to server. Please check if the server is running.');
+        }
+
+        if (await handleApiResponse(carsResponse) === false) {
+            tableauContainer.innerHTML = '<div class="calendar-error">Authentication required. Please log in again.</div>';
+            return;
+        }
+
+        if (!carsResponse.ok) {
+            const errorText = await carsResponse.text().catch(() => 'Unknown error');
+            console.error('Failed to load cars response:', carsResponse.status, errorText);
+            throw new Error(`Failed to load cars: ${carsResponse.status}`);
+        }
+
+        calendarCars = await carsResponse.json();
+
+        // Load all rental requests (without pagination for calendar view)
+        let requestsResponse;
+        try {
+            requestsResponse = await fetch(`${API_BASE}/admin/requests?type=rent&limit=1000`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+        } catch (fetchError) {
+            console.error('Network error fetching requests:', fetchError);
+            throw new Error('Unable to connect to server. Please check if the server is running.');
+        }
+
+        if (await handleApiResponse(requestsResponse) === false) {
+            tableauContainer.innerHTML = '<div class="calendar-error">Authentication required. Please log in again.</div>';
+            return;
+        }
+
+        if (!requestsResponse.ok) {
+            const errorText = await requestsResponse.text().catch(() => 'Unknown error');
+            console.error('Failed to load requests response:', requestsResponse.status, errorText);
+            throw new Error(`Failed to load rental requests: ${requestsResponse.status}`);
+        }
+
+        const result = await requestsResponse.json();
+        calendarRentalRequests = Array.isArray(result) ? result : (result.data || []);
+        
+        // Filter out requests with invalid dates
+        calendarRentalRequests = calendarRentalRequests.filter(req => {
+            if (!req.startDate || !req.endDate) return false;
+            const start = new Date(req.startDate);
+            const end = new Date(req.endDate);
+            return !isNaN(start.getTime()) && !isNaN(end.getTime());
+        });
+
+        renderCalendarTableau();
+    } catch (error) {
+        console.error('Error loading calendar view:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            cars: calendarCars?.length,
+            requests: calendarRentalRequests?.length
+        });
+        
+        let errorMessage = 'Error loading calendar. Please try again.';
+        if (error.message) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('Unable to connect')) {
+                errorMessage = 'Unable to connect to server. Please check your connection and ensure the server is running.';
+            } else if (error.message.includes('401') || error.message.includes('Authentication')) {
+                errorMessage = 'Authentication required. Please log in again.';
+            } else {
+                errorMessage = `Error loading calendar: ${error.message}`;
+            }
+        }
+        
+        tableauContainer.innerHTML = `<div class="calendar-error">${errorMessage}</div>`;
+    }
+}
+
+function renderCalendarTableau() {
+    const tableauContainer = document.getElementById('rentalCalendarTableau');
+    const monthTitle = document.getElementById('calendarMonthTitle');
+    
+    if (!tableauContainer) {
+        console.error('Calendar tableau container not found');
+        return;
+    }
+    
+    try {
+
+    // Set month title
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    if (monthTitle) {
+        monthTitle.textContent = `${monthNames[currentCalendarMonth.getMonth()]} ${currentCalendarMonth.getFullYear()}`;
+    }
+
+    // Get all days in the month
+    const year = currentCalendarMonth.getFullYear();
+    const month = currentCalendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay();
+
+    // Filter requests that overlap with current month
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
+    const relevantRequests = calendarRentalRequests.filter(req => {
+        if (!req.startDate || !req.endDate) return false;
+        const start = new Date(req.startDate);
+        const end = new Date(req.endDate);
+        return (start <= monthEnd && end >= monthStart);
+    });
+
+    // Build HTML
+    let html = '<div class="calendar-tableau-wrapper">';
+    
+    // Header row with dates
+    html += '<div class="calendar-row calendar-header-row">';
+    html += '<div class="calendar-car-header">Car</div>';
+    html += '<div class="calendar-dates-header">';
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek];
+        html += `<div class="calendar-date-header ${dayOfWeek === 0 || dayOfWeek === 6 ? 'weekend' : ''}">`;
+        html += `<span class="date-number">${day}</span>`;
+        html += `<span class="date-name">${dayName}</span>`;
+        html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+            // Rows for each car
+            if (calendarCars.length === 0) {
+                html += '<div class="calendar-empty">No rental cars available</div>';
+            } else {
+                calendarCars.forEach(car => {
+                    const carName = [
+                        car.year,
+                        car.brand || car.make,
+                        car.model
+                    ].filter(Boolean).join(' ') || 'Unknown Car';
+
+                    // Get requests for this car
+                    const carRequests = relevantRequests.filter(req => {
+                        const reqCarId = typeof req.carId === 'object' ? req.carId._id || req.carId : req.carId;
+                        const carId = typeof car._id === 'string' ? car._id : car._id.toString();
+                        return reqCarId === carId || reqCarId?.toString() === carId;
+                    });
+
+                    // Sort requests by start date for consistent ordering
+                    const sortedCarRequests = [...carRequests].sort((a, b) => {
+                        const dateA = new Date(a.startDate);
+                        const dateB = new Date(b.startDate);
+                        return dateA - dateB;
+                    });
+
+                    // Filter visible requests (those that overlap with current month) and calculate row assignments
+                    const monthStartDate = new Date(year, month, 1);
+                    const monthEndDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                    
+                    const visibleRequestsForCar = [];
+                    const carRowAssignments = [];
+                    
+                    sortedCarRequests.forEach((request) => {
+                        const startDate = new Date(request.startDate);
+                        const endDate = new Date(request.endDate);
+                        // Normalize dates to midnight for accurate comparison
+                        const reqStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                        const reqEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+                        reqEnd.setHours(23, 59, 59, 999);
+                        
+                        // Check if this request overlaps with the current month
+                        if (reqEnd >= monthStartDate && reqStart <= monthEndDate) {
+                            // Find which row this booking should be on (for overlapping bookings)
+                            const conflictingRows = new Set();
+                            
+                            // Check against all previously added visible requests
+                            for (let i = 0; i < visibleRequestsForCar.length; i++) {
+                                const other = visibleRequestsForCar[i];
+                                
+                                // Check if this request overlaps with the other request
+                                // Two date ranges overlap if: start1 <= end2 AND start2 <= end1
+                                if (reqStart <= other.reqEnd && other.reqStart <= reqEnd) {
+                                    // They overlap - mark that row as conflicting
+                                    conflictingRows.add(carRowAssignments[i]);
+                                }
+                            }
+                            
+                            // Find the first available row that doesn't conflict
+                            let rowIndex = 0;
+                            while (conflictingRows.has(rowIndex)) {
+                                rowIndex++;
+                            }
+                            
+                            // Add to visible requests and assign row
+                            visibleRequestsForCar.push({
+                                request,
+                                reqStart,
+                                reqEnd
+                            });
+                            carRowAssignments.push(rowIndex);
+                        }
+                    });
+
+                    // Calculate max rows needed for this car based on visible requests
+                    const maxRowsForCar = carRowAssignments.length > 0 ? Math.max(...carRowAssignments) + 1 : 1;
+                    const barHeight = 28;
+                    const barSpacing = 6;
+                    const containerMinHeight = Math.max(50, (maxRowsForCar * barHeight) + ((maxRowsForCar - 1) * barSpacing) + 12);
+                    
+                    // Create main row with booking bars
+                    html += '<div class="calendar-row calendar-car-row">';
+                    html += `<div class="calendar-car-name">${escapeHtml(carName)}</div>`;
+                    html += `<div class="calendar-dates-row calendar-booking-container" data-car-id="${car._id}" style="min-height: ${containerMinHeight}px;">`;
+
+                    // Create base cells for grid layout
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const currentDate = new Date(year, month, day);
+                        const dayOfWeek = currentDate.getDay();
+                        let cellClass = 'calendar-date-cell';
+                        if (dayOfWeek === 0 || dayOfWeek === 6) cellClass += ' weekend';
+                        html += `<div class="${cellClass}"></div>`;
+                    }
+
+                    // Add booking bars as overlays inside the container
+                    // Use pre-calculated visibleRequestsForCar and carRowAssignments
+                    if (visibleRequestsForCar.length > 0) {
+                        const barHeight = 28;
+                        const barSpacing = 6;
+                        
+                        // Calculate max rows for centering using pre-calculated assignments
+                        const maxRows = carRowAssignments.length > 0 ? Math.max(...carRowAssignments) + 1 : 1;
+                        const totalBarSpace = barHeight + barSpacing;
+                        const totalHeight = (maxRows * barHeight) + ((maxRows - 1) * barSpacing);
+                        // Calculate base offset to center all bars vertically in the container
+                        // Center is at 50% of container height, so we start from -(totalHeight/2) + (barHeight/2)
+                        const baseOffsetPx = -totalHeight / 2 + barHeight / 2;
+                        
+                        // Render booking bars with proper centering and row assignments
+                        visibleRequestsForCar.forEach((item, idx) => {
+                            const { request, reqStart, reqEnd } = item;
+                            const rowIndex = carRowAssignments[idx] || 0;
+                            
+                            // Calculate start and end positions
+                            let startDay = Math.max(1, reqStart >= monthStartDate ? reqStart.getDate() : 1);
+                            let endDay = Math.min(daysInMonth, reqEnd <= monthEndDate ? reqEnd.getDate() : daysInMonth);
+                            
+                            // Adjust for partial month visibility
+                            if (reqStart < monthStartDate) {
+                                startDay = 1;
+                            }
+                            if (reqEnd > monthEndDate) {
+                                endDay = daysInMonth;
+                            }
+                            
+                            // Calculate vertical offset for stacking (centered relative to container)
+                            // Use calc(50% + offset) to center from the middle of the container
+                            const rowOffsetPx = rowIndex * totalBarSpace;
+                            const topOffsetPx = baseOffsetPx + rowOffsetPx;
+                            
+                            // Calculate left position and width
+                            const cellWidth = 100 / daysInMonth; // percentage
+                            const leftPercent = ((startDay - 1) * cellWidth);
+                            const widthPercent = ((endDay - startDay + 1) * cellWidth);
+                            
+                            // Adjust for half-cell at start and end if fully visible
+                            let leftAdjust = 0;
+                            let widthAdjust = 0;
+                            
+                            if (reqStart >= monthStartDate && reqStart.getMonth() === month && reqStart.getFullYear() === year) {
+                                leftAdjust = cellWidth * 0.5; // Start from middle of start day
+                                widthAdjust -= cellWidth * 0.5;
+                            }
+                            
+                            if (reqEnd <= monthEndDate && reqEnd.getMonth() === month && reqEnd.getFullYear() === year) {
+                                widthAdjust -= cellWidth * 0.5; // End at middle of end day
+                            }
+                            
+                            const finalLeft = leftPercent + leftAdjust;
+                            const finalWidth = widthPercent + widthAdjust;
+                            
+                            const startDate = new Date(request.startDate);
+                            const endDate = new Date(request.endDate);
+                            // Normalize status to ensure proper color mapping
+                            const rawStatus = request.status || 'new';
+                            const normalizedStatus = ['new', 'contacted', 'ongoing', 'accepted', 'rejected', 'closed'].includes(rawStatus)
+                                ? rawStatus
+                                : (rawStatus === 'pending' ? 'new' : rawStatus === 'completed' ? 'closed' : 'new');
+                            const statusClass = normalizedStatus;
+                            const clientName = escapeHtml(request.clientName);
+                            const startDateStr = startDate.toLocaleDateString();
+                            const endDateStr = endDate.toLocaleDateString();
+                            const requestId = request._id || request.id;
+                            
+                            html += `<div class="booking-bar status-${statusClass}" 
+                                style="left: ${finalLeft}%; width: ${finalWidth}%; top: calc(50% + ${topOffsetPx}px); transform: translateY(-50%);" 
+                                data-request-id="${requestId}"
+                                data-request-type="rent"
+                                title="${clientName} - ${startDateStr} to ${endDateStr} (${formatRequestStatusLabel(statusClass)})">
+                                <span class="booking-bar-label">${clientName}</span>
+                            </div>`;
+                        });
+                        
+                        // Update container min-height if we have overlapping bookings
+                        if (maxRows > 1) {
+                            // Find the container we just created and update its height
+                            // We'll do this after rendering by updating the style
+                        }
+                    }
+                    
+                    html += '</div>';
+                    html += '</div>';
+                });
+            }
+
+        html += '</div>';
+        tableauContainer.innerHTML = html;
+        
+        // Update container heights for cars with overlapping bookings
+        calendarCars.forEach(car => {
+            const container = tableauContainer.querySelector(`[data-car-id="${car._id}"]`);
+            if (container) {
+                // Count how many bars are in this container
+                const bars = container.querySelectorAll('.booking-bar');
+                if (bars.length > 0) {
+                    // Get all unique row positions (top values)
+                    const rowPositions = Array.from(bars).map(bar => {
+                        const style = bar.getAttribute('style') || '';
+                        const topMatch = style.match(/top:\s*([-\d.]+)px/);
+                        return topMatch ? parseFloat(topMatch[1]) : 0;
+                    });
+                    
+                    // Calculate unique rows
+                    const uniqueRows = new Set();
+                    rowPositions.forEach(pos => {
+                        // Round to nearest row position
+                        const barHeight = 28;
+                        const barSpacing = 6;
+                        const totalBarSpace = barHeight + barSpacing;
+                        const row = Math.round((pos + (totalBarSpace * 10)) / totalBarSpace);
+                        uniqueRows.add(row);
+                    });
+                    
+                    const maxRows = Math.max(uniqueRows.size || 1, 1);
+                    const neededHeight = Math.max(50, (maxRows * 28) + ((maxRows - 1) * 6) + 12);
+                    container.style.minHeight = `${neededHeight}px`;
+                }
+            }
+        });
+        
+        // Add click handlers to booking bars
+        tableauContainer.querySelectorAll('.booking-bar').forEach(bar => {
+            bar.addEventListener('click', (e) => {
+                const requestId = bar.getAttribute('data-request-id');
+                const requestType = bar.getAttribute('data-request-type') || 'rent';
+                if (requestId) {
+                    showRequestDetails(requestId, requestType);
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error rendering calendar tableau:', error);
+        console.error('Error stack:', error.stack);
+        tableauContainer.innerHTML = `<div class="calendar-error">Error rendering calendar: ${error.message || 'Unknown error'}</div>`;
+    }
+}
+
+// Show request details modal
+async function showRequestDetails(requestId, requestType = 'rent') {
+    if (!authToken) {
+        alert('You need to be logged in to view request details.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error('Failed to load request details');
+        }
+
+        const request = await response.json();
+        const car = request.carId || {};
+        const carNameParts = [
+            car.year,
+            car.brand || car.make,
+            car.model
+        ].filter(Boolean);
+        const carName = carNameParts.length ? carNameParts.join(' ') : 'Vehicle removed';
+        const submittedAt = request.createdAt ? new Date(request.createdAt).toLocaleString() : '—';
+        const rentalDates = requestType === 'rent' && request.startDate && request.endDate
+            ? `${new Date(request.startDate).toLocaleDateString()} → ${new Date(request.endDate).toLocaleDateString()}`
+            : null;
+
+        const normalizedStatus = ['new', 'contacted', 'ongoing', 'accepted', 'rejected', 'closed'].includes(request.status)
+            ? request.status
+            : (request.status === 'pending' ? 'new' : request.status === 'completed' ? 'closed' : 'new');
+        const statusLabel = formatRequestStatusLabel(normalizedStatus);
+        const statusOptions = REQUEST_STATUS_OPTIONS.map(option => `
+            <option value="${option.value}" ${option.value === normalizedStatus ? 'selected' : ''}>
+                ${option.label}
+            </option>
+        `).join('');
+
+        const messageHtml = request.message
+            ? `<div class="request-message">${escapeHtml(request.message).replace(/\n/g, '<br>')}</div>`
+            : '';
+
+        // Calculate price for rental or sale requests
+        let basePrice = null;
+        let totalPrice = null;
+        let rentalDays = 0;
+        
+        if (requestType === 'rent' && request.startDate && request.endDate) {
+            const start = new Date(request.startDate);
+            const end = new Date(request.endDate);
+            rentalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1; // Include both start and end day
+            
+            // Use custom price if set, otherwise calculate from daily rate
+            if (request.customPrice !== null && request.customPrice !== undefined) {
+                basePrice = request.customPrice;
+            } else if (car.dailyRate) {
+                basePrice = car.dailyRate * rentalDays;
+            }
+            
+            // Apply discount if set
+            if (basePrice !== null) {
+                const discountAmount = basePrice * ((request.discountPercent || 0) / 100);
+                totalPrice = basePrice - discountAmount;
+            }
+        } else if (requestType === 'sale') {
+            // For sale requests, use custom price if set, otherwise use car price
+            if (request.customPrice !== null && request.customPrice !== undefined) {
+                basePrice = request.customPrice;
+            } else if (car.price) {
+                basePrice = car.price;
+            }
+            
+            // Apply discount if set
+            if (basePrice !== null) {
+                const discountAmount = basePrice * ((request.discountPercent || 0) / 100);
+                totalPrice = basePrice - discountAmount;
+            }
+        }
+
+        const priceHtml = totalPrice !== null
+            ? `<div class="request-price-section">
+                <div class="request-price-header">
+                    <h3 class="request-section-title">${requestType === 'rent' ? 'Rental' : 'Sale'} Price Breakdown</h3>
+                    <p class="price-section-description">Adjust the ${requestType === 'rent' ? 'rental' : 'sale'} price or apply a discount as needed.</p>
+                </div>
+                
+                <!-- Price Calculation Display -->
+                <div class="price-calculation-flow">
+                    ${requestType === 'rent' ? `
+                    <div class="price-calculation-step">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">1</span>
+                            <span>Daily Rate</span>
+                        </div>
+                        <div class="price-step-value" data-price-daily-rate="${request._id}" data-value="${car.dailyRate || 0}">${formatCurrency(car.dailyRate || 0)}<span class="price-unit">/day</span></div>
+                    </div>
+                    
+                    <div class="price-calculation-step">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">2</span>
+                            <span>Rental Period</span>
+                        </div>
+                        <div class="price-step-value" data-price-days="${request._id}" data-value="${rentalDays}">${rentalDays} <span class="price-unit">days</span></div>
+                    </div>
+                    
+                    <div class="price-calculation-arrow">×</div>
+                    ` : `
+                    <div class="price-calculation-step">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">1</span>
+                            <span>Asking Price</span>
+                        </div>
+                        <div class="price-step-value" data-price-asking="${request._id}" data-value="${car.price || 0}">${formatCurrency(car.price || 0)}</div>
+                    </div>
+                    `}
+                    
+                    <div class="price-calculation-step price-step-base">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">${requestType === 'rent' ? '3' : '2'}</span>
+                            <span>Base Price</span>
+                        </div>
+                        <div class="price-step-value" data-price-base="${request._id}">${formatCurrency(basePrice)}</div>
+                        ${request.customPrice !== null && request.customPrice !== undefined 
+                            ? `<div class="price-step-note">(Custom price set)</div>`
+                            : requestType === 'rent' 
+                                ? `<div class="price-step-note">(${formatCurrency(car.dailyRate || 0)} × ${rentalDays} days)</div>`
+                                : `<div class="price-step-note">(Original asking price)</div>`
+                        }
+                    </div>
+                    
+                    ${request.discountPercent && request.discountPercent > 0 ? `
+                    <div class="price-calculation-arrow">−</div>
+                    <div class="price-calculation-step price-step-discount" id="discount-step-${request._id}">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">4</span>
+                            <span>Discount (${request.discountPercent}%)</span>
+                        </div>
+                        <div class="price-step-value discount-amount" data-price-discount="${request._id}">-${formatCurrency(basePrice * (request.discountPercent / 100))}</div>
+                    </div>
+                    ` : `<div class="price-calculation-arrow" id="discount-arrow-${request._id}" style="display: none;">−</div>
+                    <div class="price-calculation-step price-step-discount" id="discount-step-${request._id}" style="display: none;">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">4</span>
+                            <span>Discount (<span id="discount-percent-label-${request._id}">0</span>%)</span>
+                        </div>
+                        <div class="price-step-value discount-amount" data-price-discount="${request._id}">-$0.00</div>
+                    </div>`}
+                    
+                    <div class="price-calculation-arrow price-arrow-final">=</div>
+                    
+                    <div class="price-calculation-step price-step-total">
+                        <div class="price-step-label">
+                            <span class="price-step-icon">✓</span>
+                            <span>Total Amount</span>
+                        </div>
+                        <div class="price-step-value price-total-large" data-price-total="${request._id}">${formatCurrency(totalPrice)}</div>
+                    </div>
+                </div>
+                
+                <!-- Price Adjustment Controls -->
+                <div class="price-adjustment-section">
+                    <h4 class="price-adjustment-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                        Price Adjustments
+                    </h4>
+                    <div class="price-adjustment-controls">
+                        <div class="price-input-group">
+                            <label for="customPrice-${request._id}">
+                                <span>Override Total Price</span>
+                                <small>Leave empty to use calculated price</small>
+                            </label>
+                            <div class="price-input-wrapper">
+                                <span class="price-input-prefix">$</span>
+                                <input 
+                                    type="number" 
+                                    id="customPrice-${request._id}" 
+                                    class="price-input" 
+                                    placeholder="Auto-calculated"
+                                    value="${request.customPrice !== null && request.customPrice !== undefined ? request.customPrice : ''}"
+                                    step="0.01"
+                                    min="0"
+                                    onchange="updateRequestPrice('${request._id}', this.value, document.getElementById('discountPercent-${request._id}').value)"
+                                >
+                                ${request.customPrice !== null && request.customPrice !== undefined 
+                                    ? `<button class="btn-clear-price" onclick="clearCustomPrice('${request._id}')" title="Reset to calculated price">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </svg>
+                                    </button>`
+                                    : ''
+                                }
+                            </div>
+                        </div>
+                        <div class="price-input-group">
+                            <label for="discountPercent-${request._id}">
+                                <span>Apply Discount</span>
+                                <small>Percentage discount (0-100%)</small>
+                            </label>
+                            <div class="price-input-wrapper">
+                                <input 
+                                    type="number" 
+                                    id="discountPercent-${request._id}" 
+                                    class="price-input" 
+                                    placeholder="0"
+                                    value="${request.discountPercent || 0}"
+                                    step="0.1"
+                                    min="0"
+                                    max="100"
+                                    onchange="updateRequestPrice('${request._id}', document.getElementById('customPrice-${request._id}').value, this.value)"
+                                >
+                                <span class="price-input-suffix">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`
+            : '';
+
+        // Photos display
+        const photos = request.photos || [];
+        const photosHtml = photos.length > 0
+            ? `<div class="request-photos-section">
+                <h4 class="request-section-title">Damage Photos</h4>
+                <div class="request-photos-grid" id="requestPhotosGrid-${request._id}">
+                    ${photos.map((photo, idx) => `
+                        <div class="request-photo-item">
+                            <img src="${photo}" alt="Damage photo ${idx + 1}" class="request-photo" onerror="this.style.display='none'">
+                            <button class="request-photo-delete" onclick="deleteRequestPhoto('${request._id}', '${idx}')" title="Delete photo">&times;</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`
+            : '';
+
+        const modalHtml = `
+            <div class="request-detail-modal">
+                <div class="request-detail-content">
+                    <span class="close-request-modal">&times;</span>
+                    <div class="request-card">
+                        <div class="request-card-header">
+                            <div class="request-card-title">
+                                <span class="request-car-name">${escapeHtml(carName)}</span>
+                                <span class="request-type-badge ${requestType}">${requestType === 'rent' ? 'Rental request' : 'Sale request'}</span>
+                            </div>
+                            <span class="request-status-badge ${normalizedStatus}">${escapeHtml(statusLabel)}</span>
+                        </div>
+                        <div class="request-meta-grid">
+                            <div class="request-meta-item">
+                                <span class="request-meta-label">Client</span>
+                                <span class="request-meta-value">${escapeHtml(request.clientName)}</span>
+                            </div>
+                            <div class="request-meta-item">
+                                <span class="request-meta-label">Email</span>
+                                <span class="request-meta-value">${escapeHtml(request.clientEmail)}</span>
+                            </div>
+                            <div class="request-meta-item">
+                                <span class="request-meta-label">Phone</span>
+                                <span class="request-meta-value">${escapeHtml(request.clientPhone)}</span>
+                            </div>
+                            <div class="request-meta-item">
+                                <span class="request-meta-label">Submitted</span>
+                                <span class="request-meta-value">${escapeHtml(submittedAt)}</span>
+                            </div>
+                            ${rentalDates ? `
+                                <div class="request-meta-item">
+                                    <span class="request-meta-label">Rental window</span>
+                                    <span class="request-meta-value">${escapeHtml(rentalDates)}</span>
+                                </div>` : ''}
+                            ${requestType === 'rent' && request.fuelLevel ? `
+                                <div class="request-meta-item">
+                                    <span class="request-meta-label">Fuel Level (at start)</span>
+                                    <span class="request-meta-value">${escapeHtml(request.fuelLevel)}</span>
+                                </div>` : ''}
+                        </div>
+                        ${messageHtml}
+                        ${priceHtml}
+                        
+                        ${requestType === 'rent' ? `
+                        <!-- Fuel Level Section -->
+                        <div class="request-fuel-section">
+                            <label class="request-section-title" for="fuelLevel-${request._id}">Fuel Level at Rental Start</label>
+                            <select 
+                                id="fuelLevel-${request._id}" 
+                                class="request-fuel-select" 
+                                onchange="updateFuelLevel('${request._id}', this.value)"
+                            >
+                                <option value="" ${!request.fuelLevel ? 'selected' : ''}>Not recorded</option>
+                                <option value="Empty" ${request.fuelLevel === 'Empty' ? 'selected' : ''}>Empty</option>
+                                <option value="1/4" ${request.fuelLevel === '1/4' ? 'selected' : ''}>1/4 Full</option>
+                                <option value="1/2" ${request.fuelLevel === '1/2' ? 'selected' : ''}>1/2 Full</option>
+                                <option value="3/4" ${request.fuelLevel === '3/4' ? 'selected' : ''}>3/4 Full</option>
+                                <option value="Full" ${request.fuelLevel === 'Full' ? 'selected' : ''}>Full</option>
+                            </select>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Notes Section -->
+                        <div class="request-notes-section">
+                            <label class="request-section-title" for="requestNotes-${request._id}">Notes</label>
+                            <textarea 
+                                id="requestNotes-${request._id}" 
+                                class="request-notes-textarea" 
+                                placeholder="Add notes about this rental request..."
+                                onblur="saveRequestNotes('${request._id}', this.value)"
+                            >${escapeHtml(request.notes || '')}</textarea>
+                        </div>
+
+                        <!-- Photos Section -->
+                        <div class="request-photos-upload-section">
+                            <div class="request-photos-header">
+                                <h4 class="request-section-title">Damage Photos</h4>
+                                <label for="requestPhotoUpload-${request._id}" class="btn-camera" title="Take or upload photos">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Add Photos
+                                </label>
+                                <input 
+                                    type="file" 
+                                    id="requestPhotoUpload-${request._id}" 
+                                    class="request-photo-upload-input" 
+                                    accept="image/*" 
+                                    capture="environment"
+                                    multiple
+                                    style="display: none;"
+                                    onchange="uploadRequestPhotos('${request._id}', this.files)"
+                                >
+                            </div>
+                            ${photosHtml}
+                        </div>
+
+                        <div class="request-actions">
+                            <label for="status-${request._id}">Update status</label>
+                            <select id="status-${request._id}" class="request-status-select" onchange="updateRequestStatus('${request._id}', this.value)">
+                                ${statusOptions}
+                            </select>
+                            ${normalizedStatus === 'accepted' ? `
+                                <button class="btn-primary btn-print-contract" onclick="printContract('${request._id}', '${requestType}')" title="Print/Download Contract">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                                        <rect x="6" y="14" width="12" height="8"></rect>
+                                    </svg>
+                                    Print Contract
+                                </button>
+                            ` : ''}
+                            <button class="btn-delete" onclick="deleteRequest('${request._id}', '${requestType}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if any
+        const existingModal = document.getElementById('requestDetailModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Create and show modal
+        const modal = document.createElement('div');
+        modal.id = 'requestDetailModal';
+        modal.innerHTML = modalHtml;
+        document.body.appendChild(modal);
+
+        // Close handlers
+        const closeBtn = modal.querySelector('.close-request-modal');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                modal.remove();
+            });
+        }
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+
+        // Show modal
+        setTimeout(() => {
+            modal.classList.add('active');
+        }, 10);
+    } catch (error) {
+        console.error('Error loading request details:', error);
+        alert('Error loading request details. Please try again.');
+    }
+}
+
+// Upload photos for a rental request
+async function uploadRequestPhotos(requestId, files) {
+    if (!files || files.length === 0) return;
+    
+    if (!authToken) {
+        alert('You need to be logged in to upload photos.');
+        return;
+    }
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('photos', files[i]);
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/upload/rental-photos/${requestId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Add photos to the request in the database
+            const updateResponse = await fetch(`${API_BASE}/admin/requests/${requestId}/photos`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ photos: data.urls })
+            });
+
+            if (updateResponse.ok) {
+                // Reload request details to show new photos
+                const requestType = 'rent'; // Photos are only for rental requests
+                showRequestDetails(requestId, requestType);
+            } else {
+                alert('Photos uploaded but failed to save to request. Please refresh.');
+            }
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error uploading photos');
+        }
+    } catch (error) {
+        console.error('Error uploading photos:', error);
+        alert('Error uploading photos');
+    }
+}
+
+// Delete a photo from a rental request
+async function deleteRequestPhoto(requestId, photoIndex) {
+    if (!authToken) {
+        alert('You need to be logged in to delete photos.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}/photos/${photoIndex}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (response.ok) {
+            // Reload request details
+            showRequestDetails(requestId, 'rent');
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error deleting photo');
+        }
+    } catch (error) {
+        console.error('Error deleting photo:', error);
+        alert('Error deleting photo');
+    }
+}
+
+// Save notes for a rental request
+async function saveRequestNotes(requestId, notes) {
+    if (!authToken) {
+        return; // Silently fail if not logged in
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}/notes`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ notes })
+        });
+
+        if (!response.ok) {
+            console.error('Failed to save notes');
+        }
+    } catch (error) {
+        console.error('Error saving notes:', error);
+    }
+}
+
+// Update rental price/discount
+async function updateRequestPrice(requestId, customPrice, discountPercent) {
+    if (!authToken) {
+        return; // Silently fail if not logged in
+    }
+
+    try {
+        const priceValue = customPrice === '' || customPrice === null || customPrice === undefined 
+            ? null 
+            : parseFloat(customPrice);
+        const discountValue = discountPercent === '' || discountPercent === null || discountPercent === undefined
+            ? 0
+            : parseFloat(discountPercent);
+
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}/price`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ 
+                customPrice: priceValue,
+                discountPercent: discountValue
+            })
+        });
+
+        if (response.ok) {
+            // Update the display immediately without reloading the entire modal
+            updatePriceDisplay(requestId, priceValue, discountValue);
+            
+            // Reload the request list to show updated price
+            const requestType = document.querySelector('.request-type-badge.rent') ? 'rent' : 'sale';
+            if (requestType) {
+                loadClientRequests(requestType);
+            }
+            
+            // Also reload request details to ensure everything is in sync
+            // This ensures the contract will have the latest price when printed
+            setTimeout(() => {
+                showRequestDetails(requestId, requestType || 'rent');
+            }, 100);
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error updating price');
+        }
+    } catch (error) {
+        console.error('Error updating price:', error);
+        alert('Error updating price. Please try again.');
+    }
+}
+
+// Update price display immediately (before server response)
+function updatePriceDisplay(requestId, customPrice, discountPercent) {
+    // Get current values from the DOM
+    const dailyRateEl = document.querySelector(`[data-price-daily-rate="${requestId}"]`);
+    const daysEl = document.querySelector(`[data-price-days="${requestId}"]`);
+    const askingPriceEl = document.querySelector(`[data-price-asking="${requestId}"]`);
+    const basePriceEl = document.querySelector(`[data-price-base="${requestId}"]`);
+    const discountEl = document.querySelector(`[data-price-discount="${requestId}"]`);
+    const totalPriceEl = document.querySelector(`[data-price-total="${requestId}"]`);
+    
+    // Calculate base price - handle both rental and sale
+    let basePrice;
+    if (dailyRateEl && daysEl) {
+        // Rental request
+        const dailyRate = parseFloat(dailyRateEl.dataset.value || 0);
+        const days = parseInt(daysEl.dataset.value || 0);
+        basePrice = customPrice !== null && customPrice !== undefined ? customPrice : (dailyRate * days);
+    } else if (askingPriceEl) {
+        // Sale request
+        const askingPrice = parseFloat(askingPriceEl.dataset.value || 0);
+        basePrice = customPrice !== null && customPrice !== undefined ? customPrice : askingPrice;
+    } else {
+        return; // Can't update without price data
+    }
+    
+    // Calculate discount
+    const discount = parseFloat(discountPercent || 0);
+    const discountAmount = basePrice * (discount / 100);
+    const totalPrice = basePrice - discountAmount;
+    
+    // Update base price display
+    if (basePriceEl) {
+        basePriceEl.textContent = formatCurrency(basePrice);
+        const noteEl = basePriceEl.parentElement.querySelector('.price-step-note');
+        if (noteEl) {
+            if (customPrice !== null && customPrice !== undefined) {
+                noteEl.textContent = '(Custom price set)';
+            } else if (dailyRateEl && daysEl) {
+                const dailyRate = parseFloat(dailyRateEl.dataset.value || 0);
+                const days = parseInt(daysEl.dataset.value || 0);
+                noteEl.textContent = `(${formatCurrency(dailyRate)} × ${days} days)`;
+            } else {
+                noteEl.textContent = '(Original asking price)';
+            }
+        }
+    }
+    
+    // Update discount display
+    const discountStep = document.getElementById(`discount-step-${requestId}`);
+    const discountArrow = document.getElementById(`discount-arrow-${requestId}`);
+    
+    if (discount > 0) {
+        if (discountStep) {
+            discountStep.style.display = 'flex';
+            if (discountEl) {
+                discountEl.textContent = `-${formatCurrency(discountAmount)}`;
+            }
+            const discountLabel = discountStep.querySelector('.price-step-label');
+            const discountPercentLabel = document.getElementById(`discount-percent-label-${requestId}`);
+            if (discountLabel) {
+                discountLabel.innerHTML = `<span class="price-step-icon">4</span><span>Discount (${discount}%)</span>`;
+            }
+            if (discountPercentLabel) {
+                discountPercentLabel.textContent = discount;
+            }
+        }
+        if (discountArrow) {
+            discountArrow.style.display = 'flex';
+        }
+    } else {
+        if (discountStep) {
+            discountStep.style.display = 'none';
+        }
+        if (discountArrow) {
+            discountArrow.style.display = 'none';
+        }
+    }
+    
+    // Update total price display
+    if (totalPriceEl) {
+        totalPriceEl.textContent = formatCurrency(totalPrice);
+    }
+}
+
+// Clear custom price (reset to calculated price)
+async function clearCustomPrice(requestId) {
+    if (!authToken) {
+        return;
+    }
+
+    const discountInput = document.getElementById(`discountPercent-${requestId}`);
+    const discountValue = discountInput ? discountInput.value : 0;
+    
+    await updateRequestPrice(requestId, null, discountValue);
+}
+
+// Print/Download contract as PDF (rental or sale)
+async function printContract(requestId, requestType = 'rent') {
+    if (!authToken) {
+        alert('You need to be logged in to print contracts.');
+        return;
+    }
+
+    try {
+        // Generate contract HTML (browser will handle PDF via print dialog)
+        const endpoint = requestType === 'rent' 
+            ? `${API_BASE}/admin/requests/${requestId}/contract/pdf`
+            : `${API_BASE}/admin/requests/${requestId}/sales-contract/pdf`;
+        const response = await fetch(endpoint, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (await handleApiResponse(response) === false) {
+            return;
+        }
+
+        if (response.ok) {
+            // Get HTML content
+            const htmlContent = await response.text();
+            
+            // Create a new window with the contract HTML
+            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            if (!printWindow) {
+                // If popup blocked, show a message
+                alert('Please allow popups to view the contract, or use the download option.');
+                // Alternative: download as HTML file
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rental-contract-${requestId}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+            
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+            
+            // Wait for content to load, then open print dialog
+            printWindow.onload = function() {
+                setTimeout(() => {
+                    printWindow.print();
+                    // Optional: close window after printing
+                    // printWindow.close();
+                }, 250);
+            };
+        } else {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            console.error('Error response:', errorText);
+            alert('Error generating contract. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error generating contract:', error);
+        alert('Error generating contract. Please check your connection and try again.');
+    }
+}
+
+// Update fuel level for a rental request
+async function updateFuelLevel(requestId, fuelLevel) {
+    if (!authToken) {
+        return; // Silently fail if not logged in
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/admin/requests/${requestId}/fuel-level`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ fuelLevel })
+        });
+
+        if (response.ok) {
+            // Reload request details to show updated fuel level
+            const requestType = document.querySelector('.request-type-badge.rent') ? 'rent' : 'sale';
+            setTimeout(() => {
+                showRequestDetails(requestId, requestType || 'rent');
+            }, 100);
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error updating fuel level');
+        }
+    } catch (error) {
+        console.error('Error updating fuel level:', error);
+        alert('Error updating fuel level. Please try again.');
+    }
+}
+
+// Print/Download rental contract (backwards compatibility)
+async function printRentalContract(requestId) {
+    return printContract(requestId, 'rent');
+}
+
+// Make functions globally accessible
+window.uploadRequestPhotos = uploadRequestPhotos;
+window.deleteRequestPhoto = deleteRequestPhoto;
+window.saveRequestNotes = saveRequestNotes;
+window.printContract = printContract;
+window.printRentalContract = printRentalContract;
+window.updateRequestPrice = updateRequestPrice;
+window.clearCustomPrice = clearCustomPrice;
+window.updateFuelLevel = updateFuelLevel;
 
 //# sourceMappingURL=app.js.map

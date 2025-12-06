@@ -102,36 +102,50 @@
                             <!-- Background content for home page -->
                         </div>
                     </div>
-                    <div class="home-footer">
-                        <div class="footer-contact">
-                            <a class="contact-chip" data-contact-phone-link href="tel:+19415550123" aria-label="Call us at (941) 555-0123">
-                                <span class="contact-chip-icon" aria-hidden="true">
-                                    <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 001.5-1.5v-2.615a1.5 1.5 0 00-1.17-1.47l-3.183-.796a1.5 1.5 0 00-1.64.684l-.7 1.167a12.003 12.003 0 01-5.516-5.516l1.167-.7a1.5 1.5 0 00.684-1.64L9.835 3.87A1.5 1.5 0 008.365 2.7H5.75A1.5 1.5 0 004.25 4.2v2.55z" />
-                                    </svg>
-                                </span>
-                                <span class="contact-chip-text">
-                                    <span class="contact-chip-label">Call us</span>
-                                    <span class="contact-chip-value" data-contact-phone-value>(941) 555-0123</span>
-                                </span>
-                            </a>
-        <a class="contact-chip" data-contact-address-link href="https://www.google.com/maps/dir/?api=1&destination=5671%20McIntosh%20Rd%20Sarasota%2C%20FL%2034233" target="_blank" rel="noopener" aria-label="Get directions to 5671 McIntosh Rd Sarasota, FL 34233">
-                                <span class="contact-chip-icon" aria-hidden="true">
-                                    <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                    </svg>
-                                </span>
-                                <span class="contact-chip-text">
-                                    <span class="contact-chip-label">Directions</span>
-                <span class="contact-chip-value" data-contact-address-value>5671 McIntosh Rd Sarasota, FL 34233</span>
-                                </span>
-                            </a>
-                        </div>
-                    </div>
                 </div>
             </div>
         </section>
+
+        <!-- Home identity overlay -->
+        <div class="home-identity-panel">
+            <img src="logo.avif" alt="Sarasota Automotive Logo" class="home-identity-logo site-logo">
+            <h1 class="home-identity-title">Sarasota Automotive</h1>
+        </div>
+
+        <!-- Home footer contact cards -->
+        <div class="home-footer">
+            <div class="footer-contact">
+                <a class="contact-chip" data-contact-phone-link
+                   href="tel:+19415550123"
+                   aria-label="Call us at (941) 555-0123">
+                    <span class="contact-chip-icon" aria-hidden="true">
+                        <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 001.5-1.5v-2.615a1.5 1.5 0 00-1.17-1.47l-3.183-.796a1.5 1.5 0 00-1.64.684l-.7 1.167a12.003 12.003 0 01-5.516-5.516l1.167-.7a1.5 1.5 0 00.684-1.64L9.835 3.87A1.5 1.5 0 008.365 2.7H5.75A1.5 1.5 0 004.25 4.2v2.55z" />
+                        </svg>
+                    </span>
+                    <span class="contact-chip-text">
+                        <span class="contact-chip-label">Call us</span>
+                        <span class="contact-chip-value" data-contact-phone-value>(941) 555-0123</span>
+                    </span>
+                </a>
+
+                <a class="contact-chip" data-contact-address-link
+                   href="https://www.google.com/maps/dir/?api=1&destination=5671%20McIntosh%20Rd%20Sarasota%2C%20FL%2034233"
+                   target="_blank" rel="noopener"
+                   aria-label="Get directions to 5671 McIntosh Rd Sarasota, FL 34233">
+                    <span class="contact-chip-icon" aria-hidden="true">
+                        <svg class="contact-chip-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1115 0z" />
+                        </svg>
+                    </span>
+                    <span class="contact-chip-text">
+                        <span class="contact-chip-label">Directions</span>
+                        <span class="contact-chip-value" data-contact-address-value>5671 McIntosh Rd Sarasota, FL 34233</span>
+                    </span>
+                </a>
+            </div>
+        </div>
 
         <!-- Inventory for Sale Page -->
         <section id="inventory-sale" class="page">
@@ -364,8 +378,8 @@
                         <button class="admin-nav-btn active" data-section="dashboard">Dashboard</button>
                         <button class="admin-nav-btn" data-section="manage-sale">Manage Sale Cars</button>
                         <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
-                        <button class="admin-nav-btn" data-section="sale-requests">Sale Requests</button>
-                        <button class="admin-nav-btn" data-section="rental-calendar">Rental Calendar</button>
+                        <button class="admin-nav-btn" data-section="rental-requests">Rental Requests</button>
+                        <button class="admin-nav-btn" data-section="client-requests">Sale Requests</button>
                     </div>
                     <div class="admin-nav-right">
                         <button class="admin-nav-btn-icon" data-section="site-settings" title="Site Settings">
@@ -430,13 +444,58 @@
                     <div id="rentCarsList" class="admin-cars-list"></div>
                 </div>
 
-                <!-- Sale Requests (list) -->
-                <div id="sale-requests" class="admin-section">
+                <!-- Rental Requests -->
+                <div id="rental-requests" class="admin-section">
+                    <div class="admin-header">
+                        <h2>Rental Requests</h2>
+                        <div class="rental-view-toggle">
+                            <button class="view-toggle-btn active" data-view="calendar" id="calendarViewBtn">Calendar</button>
+                            <button class="view-toggle-btn" data-view="list" id="listViewBtn">List</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Calendar Tableau View -->
+                    <div id="rental-calendar-view" class="rental-calendar-container">
+                        <div class="calendar-header">
+                            <button class="calendar-nav-btn" id="prevMonthBtn" aria-label="Previous month">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <h3 id="calendarMonthTitle" class="calendar-month-title"></h3>
+                            <button class="calendar-nav-btn" id="nextMonthBtn" aria-label="Next month">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="rentalCalendarTableau" class="rental-calendar-tableau">
+                            <div class="calendar-loading">Loading calendar...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- List View -->
+                    <div id="rental-list-view" class="rental-list-container" style="display: none;">
+                        <div class="request-sections">
+                            <div class="request-column" style="width: 100%;">
+                                <div class="request-column-header">
+                                    <h3>Rental Requests</h3>
+                                    <span class="request-counter" id="rentalRequestsCount">0</span>
+                                </div>
+                                <div id="rentalRequestsList" class="request-list"></div>
+                                <div class="request-pagination" id="rentalRequestsPagination" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sale Requests (Client Requests) -->
+                <div id="client-requests" class="admin-section">
                     <div class="admin-header">
                         <h2>Sale Requests</h2>
                     </div>
                     <div class="request-sections">
-                        <div class="request-column">
+                        <div class="request-column" style="width: 100%;">
                             <div class="request-column-header">
                                 <h3>Sale Requests</h3>
                                 <span class="request-counter" id="saleRequestsCount">0</span>
@@ -444,27 +503,6 @@
                             <div id="saleRequestsList" class="request-list"></div>
                             <div class="request-pagination" id="saleRequestsPagination" style="display: none;"></div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Rental Requests Calendar -->
-                <div id="rental-calendar" class="admin-section">
-                    <div class="admin-header">
-                        <h2>Rental Requests Calendar</h2>
-                    </div>
-                    <div class="rental-calendar-header">
-                        <button type="button" class="btn-secondary calendar-nav-btn" id="rentalCalendarPrevBtn">&lt; Prev</button>
-                        <span class="rental-calendar-month" id="rentalCalendarMonthLabel">Loading…</span>
-                        <button type="button" class="btn-secondary calendar-nav-btn" id="rentalCalendarNextBtn">Next &gt;</button>
-                    </div>
-                    <div id="rentalCalendarContainer" class="rental-calendar-container"></div>
-                </div>
-
-                <!-- Request Detail Modal -->
-                <div id="requestDetailModal" class="modal">
-                    <div class="modal-content request-detail-modal">
-                        <span class="close-modal" id="closeRequestDetailModal">&times;</span>
-                        <div id="requestDetailBody"></div>
                     </div>
                 </div>
 
@@ -574,6 +612,25 @@
                             <div class="form-group">
                                 <label for="containerTextColor">Container Text Color</label>
                                 <input type="color" id="containerTextColor" name="containerTextColor" value="#e0e0e0">
+                            </div>
+                        </div>
+
+                        <!-- Contract Terms -->
+                        <div class="settings-group">
+                            <h3>Rental Contract Terms & Conditions</h3>
+                            <div class="form-group">
+                                <label for="contractTerms">Rental Contract Terms and Conditions</label>
+                                <textarea id="contractTerms" name="contractTerms" rows="10" placeholder="Enter the terms and conditions that will appear on rental contracts..."></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">This text will appear in the Terms and Conditions section of rental contracts. Use line breaks to separate paragraphs.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>Sales Contract Terms & Conditions</h3>
+                            <div class="form-group">
+                                <label for="salesContractTerms">Sales Contract Terms and Conditions</label>
+                                <textarea id="salesContractTerms" name="salesContractTerms" rows="10" placeholder="Enter the terms and conditions that will appear on sales contracts..."></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">This text will appear in the Terms and Conditions section of sales contracts. Use line breaks to separate paragraphs.</small>
                             </div>
                         </div>
 
@@ -735,17 +792,6 @@
                 </form>
             </div>
         </div>
-
-        <!-- Global Confirm Modal -->
-        <div id="confirmModal" class="modal">
-            <div class="modal-content confirm-modal">
-                <p id="confirmMessage"></p>
-                <div class="confirm-actions">
-                    <button id="confirmCancelBtn" class="btn-secondary">Cancel</button>
-                    <button id="confirmOkBtn" class="btn-primary">OK</button>
-                </div>
-            </div>
-        </div>
     </main>
 
     <!-- Add Brand Modal -->
@@ -798,6 +844,29 @@
             <div class="cookie-consent-actions">
                 <button type="button" class="btn-secondary cookie-button" id="cookieTechnicalBtn" aria-label="Use only technical cookies">Only technical cookies</button>
                 <button type="button" class="btn-primary cookie-button" id="cookieAcceptBtn" aria-label="Accept analytics cookies">Allow analytics</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmationModal" class="custom-modal">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h3 class="custom-modal-title" id="confirmationModalTitle">Confirm Action</h3>
+                <button class="custom-modal-close" id="confirmationModalClose">&times;</button>
+            </div>
+            <div class="custom-modal-body">
+                <div class="custom-modal-icon" id="confirmationModalIcon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <p class="custom-modal-message" id="confirmationModalMessage"></p>
+                <div id="confirmationModalDetails" class="custom-modal-details"></div>
+            </div>
+            <div class="custom-modal-footer">
+                <button class="custom-modal-btn custom-modal-btn-cancel" id="confirmationModalCancel">Cancel</button>
+                <button class="custom-modal-btn custom-modal-btn-confirm" id="confirmationModalConfirm">Confirm</button>
             </div>
         </div>
     </div>

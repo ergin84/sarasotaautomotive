@@ -60,6 +60,24 @@ const siteSettingsSchema = new mongoose.Schema({
     googleAnalyticsId: {
         type: String,
         default: ''
+    },
+    contractTerms: {
+        type: String,
+        default: `By signing below, the renter agrees to return the vehicle in the same condition as received, except for normal wear and tear. Any damages beyond normal wear will be charged to the renter.
+
+The renter is responsible for all traffic violations, tolls, and parking fees during the rental period.
+
+Fuel must be returned at the same level as received, or a refueling fee will apply.`
+    },
+    salesContractTerms: {
+        type: String,
+        default: `By signing below, the buyer agrees to purchase the vehicle as described in this contract for the agreed-upon price.
+
+The vehicle is sold "as is" with no warranties expressed or implied, except as required by law.
+
+The buyer is responsible for all transfer fees, registration, and title fees.
+
+Full payment must be received before the vehicle title is transferred.`
     }
 }, {
     timestamps: true

@@ -21,7 +21,7 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
 // Submit rental inquiry
 router.post('/inquiry', async (req, res) => {
   try {
-    const { carId, clientName, clientEmail, clientPhone, message, startDate, endDate } = req.body;
+    const { carId, clientName, clientEmail, clientPhone, message, startDate, endDate, fuelLevel } = req.body;
 
     // Validate car exists
     const car = await Car.findById(carId);
@@ -38,7 +38,8 @@ router.post('/inquiry', async (req, res) => {
       clientPhone,
       message,
       startDate,
-      endDate
+      endDate,
+      fuelLevel: fuelLevel || ''
     });
 
     await rentalRequest.save();
