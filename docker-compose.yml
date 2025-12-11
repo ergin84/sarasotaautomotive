@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: sarasota-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: sarasota_automotive
+    networks:
+      - sarasota-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/sarasota_automotive --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sarasota-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/sarasota_automotive
+    volumes:
+      - ./public/uploads:/app/public/uploads
+      - ./public:/app/public
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - sarasota-network
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  sarasota-network:
+    driver: bridge
+
