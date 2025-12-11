@@ -78,6 +78,46 @@ The vehicle is sold "as is" with no warranties expressed or implied, except as r
 The buyer is responsible for all transfer fees, registration, and title fees.
 
 Full payment must be received before the vehicle title is transferred.`
+    },
+    privacyPolicy: {
+        type: String,
+        default: `Sarasota Automotive LLC respects your privacy. This notice explains how we collect, use, and protect personal information that you share through our website forms.
+
+Information We Collect
+
+Contact Form: Name, email address, phone number, and the content of your message.
+Vehicle Request Form: Name, email address, phone number, preferred contact method, and request details for rental or sale vehicles.
+
+How We Use Your Information
+
+- Respond to your enquiries and provide the services you request.
+- Schedule appointments or follow up on rental and sale requests.
+- Notify you about updates directly related to your enquiry.
+
+How We Store and Share Data
+
+- Information submitted through our forms is stored securely within our customer management tools.
+- Only authorised Sarasota Automotive staff can access your data.
+- We do not sell or share your personal information with third parties unless required by law.
+
+Cookies and Tracking Technologies
+
+We use cookies and similar technologies to ensure the site works correctly and to improve your experience.
+
+Essential technical cookies: These are required for core site features such as navigation, security, form submissions, and showing the correct content. They are always active because the site cannot function without them.
+Analytics cookies (optional): With your consent, we load Google Analytics to understand how visitors use the site and to help us make improvements. These cookies collect anonymised usage data such as page views, device/browser information, and general location.
+
+Your Rights
+
+- Request a copy of the information we hold about you.
+- Ask us to update or delete your personal information.
+- Withdraw consent for us to contact you at any time.
+
+To exercise these rights, email us at info@sarasotaautomotive.com or call our office.
+
+Updates
+
+We may update this policy from time to time. The latest version will always be available on this page.`
     }
 }, {
     timestamps: true

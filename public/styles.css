@@ -882,6 +882,20 @@ body::before {
     padding: 0;
 }
 
+/* Homepage - Show original image brightness without dark overlays */
+body.home-page-active::before {
+    background-image: var(--site-background-image);
+    background-position: center center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+/* Homepage - Remove dark body background overlay */
+body.home-page-active {
+    background: transparent;
+}
+
 /* Home Page - Fullscreen Hero */
 #home {
     width: 100vw;

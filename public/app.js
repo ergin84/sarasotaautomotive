@@ -403,6 +403,8 @@ function showPage(pageId) {
             loadCarsForRent();
         } else if (pageId === 'admin-dashboard' && authToken) {
             loadAdminDashboard();
+        } else if (pageId === 'privacy') {
+            loadPrivacyPolicy();
         }
     }
 }
@@ -1354,6 +1356,22 @@ async function loadSiteSettingsForDisplay() {
     }
 }
 
+async function loadPrivacyPolicy() {
+    try {
+        const response = await fetch(`${API_BASE}/site-settings`);
+        if (response.ok) {
+            const settings = await response.json();
+            updatePrivacyPolicy(settings);
+        }
+    } catch (error) {
+        console.error('Error loading privacy policy:', error);
+        const privacyContent = document.getElementById('privacyPolicyContent');
+        if (privacyContent) {
+            privacyContent.innerHTML = '<p class="privacy-intro">Error loading privacy policy. Please try again later.</p>';
+        }
+    }
+}
+
 function populateSiteSettingsForm(settings) {
     document.getElementById('siteTitle').value = settings.siteTitle || '';
     document.getElementById('logoText').value = settings.logoText || '';
@@ -1410,6 +1428,9 @@ function populateSiteSettingsForm(settings) {
     // Set contract terms
     document.getElementById('contractTerms').value = settings.contractTerms || '';
     document.getElementById('salesContractTerms').value = settings.salesContractTerms || '';
+    
+    // Set privacy policy
+    document.getElementById('privacyPolicy').value = settings.privacyPolicy || '';
 }
 
 async function handleSiteSettingsSubmit(e) {
@@ -1433,7 +1454,8 @@ async function handleSiteSettingsSubmit(e) {
         containerBorderColor: document.getElementById('containerBorderColorText').value || document.getElementById('containerBorderColor').value,
         containerTextColor: document.getElementById('containerTextColor').value,
         contractTerms: document.getElementById('contractTerms').value,
-        salesContractTerms: document.getElementById('salesContractTerms').value
+        salesContractTerms: document.getElementById('salesContractTerms').value,
+        privacyPolicy: document.getElementById('privacyPolicy').value
     };
 
     try {
@@ -1572,7 +1594,111 @@ function applySiteSettings(settings) {
         document.documentElement.style.setProperty('--container-text-color', settings.containerTextColor);
     }
 
+    // Apply privacy policy
+    updatePrivacyPolicy(settings);
+
     updateFooterUserInfo();
+}
+
+function formatPrivacyPolicy(text) {
+    if (!text) return '';
+    
+    // Escape HTML first
+    const escapedText = escapeHtml(text);
+    
+    // Split into paragraphs (double line breaks)
+    const paragraphs = escapedText.split(/\n\n+/).filter(p => p.trim());
+    
+    if (paragraphs.length === 0) return '';
+    
+    let html = '';
+    let isFirst = true;
+    
+    paragraphs.forEach(para => {
+        const trimmed = para.trim();
+        if (!trimmed) return;
+        
+        // Check if paragraph looks like a heading (all caps on first line, short, ends with colon)
+        const lines = trimmed.split('\n');
+        const firstLine = lines[0].trim();
+        const isHeading = lines.length > 1 && 
+                         firstLine.length < 80 && 
+                         (firstLine.endsWith(':') || firstLine.match(/^[A-Z\s]+$/));
+        
+        if (isHeading) {
+            // It's a section heading
+            const headingText = firstLine.replace(':', '').trim();
+            const content = lines.slice(1).join('\n').trim();
+            
+            html += `<div class="privacy-section">`;
+            html += `<h2>${headingText}</h2>`;
+            if (content) {
+                html += formatParagraphContent(content);
+            }
+            html += `</div>`;
+            isFirst = false;
+        } else {
+            // Regular paragraph
+            if (isFirst) {
+                html += `<p class="privacy-intro">${formatParagraphContent(trimmed)}</p>`;
+                isFirst = false;
+            } else {
+                html += formatParagraphContent(trimmed);
+            }
+        }
+    });
+    
+    return html;
+}
+
+function formatParagraphContent(text) {
+    const lines = text.split('\n').filter(l => l.trim());
+    let html = '';
+    let inList = false;
+    
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        
+        // Check if it's a list item
+        const listMatch = trimmed.match(/^[-•]\s+(.+)$/);
+        if (listMatch) {
+            if (!inList) {
+                html += '<ul>';
+                inList = true;
+            }
+            html += `<li>${formatStrongText(listMatch[1])}</li>`;
+        } else {
+            if (inList) {
+                html += '</ul>';
+                inList = false;
+            }
+            if (trimmed) {
+                html += `<p>${formatStrongText(trimmed)}</p>`;
+            }
+        }
+    });
+    
+    if (inList) {
+        html += '</ul>';
+    }
+    
+    return html;
+}
+
+function formatStrongText(text) {
+    // Format **text** as <strong>text</strong>
+    return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+function updatePrivacyPolicy(settings) {
+    const privacyContent = document.getElementById('privacyPolicyContent');
+    if (!privacyContent) return;
+    
+    if (settings.privacyPolicy) {
+        privacyContent.innerHTML = formatPrivacyPolicy(settings.privacyPolicy);
+    } else {
+        privacyContent.innerHTML = '<p class="privacy-intro">Privacy policy content will be displayed here once configured in Site Settings.</p>';
+    }
 }
 
 async function resetSiteSettings() {
@@ -1699,49 +1825,8 @@ function updateFooterUserInfo() {
     const footerAdminLink = document.querySelector('.footer-admin-link');
     if (!footerAdminLink) return;
 
-    const phoneSourceEl = document.querySelector('[data-contact-phone-value]');
-    const addressSourceEl = document.querySelector('[data-contact-address-value]');
-    const phoneText = phoneSourceEl ? phoneSourceEl.textContent.trim() : '';
-    const addressText = addressSourceEl ? addressSourceEl.textContent.trim() : '';
-
-    const phoneHref = phoneText ? buildTelHref(phoneText) : '';
-    const addressHref = addressText ? buildDirectionsUrl(addressText) : '';
-
-    const contactMarkup = `
-        <div class="footer-contact-block">
-            ${phoneText ? `
-                <a class="footer-contact-link" data-contact-phone-link href="${phoneHref || '#'}" aria-label="Call us at ${escapeHtml(phoneText)}">
-                    <span class="footer-contact-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M2.25 6.75c0 8.284 6.716 15 15 15H19.5a1.5 1.5 0 0 0 1.5-1.5v-2.615a1.5 1.5 0 0 0-1.17-1.47l-3.183-.796a1.5 1.5 0 0 0-1.64.684l-.7 1.167a12.003 12.003 0 0 1-5.516-5.516l1.167-.7a1.5 1.5 0 0 0 .684-1.64L9.835 3.87A1.5 1.5 0 0 0 8.365 2.7H5.75A1.5 1.5 0 0 0 4.25 4.2v2.55z"></path>
-                        </svg>
-                    </span>
-                    <span class="footer-contact-text">
-                        <span class="footer-contact-label">Call us</span>
-                        <span class="footer-contact-value" data-contact-phone-value>${escapeHtml(phoneText)}</span>
-                    </span>
-                </a>
-            ` : ''}
-            ${addressText ? `
-                <a class="footer-contact-link footer-contact-address" data-contact-address-link href="${addressHref || '#'}" target="_blank" rel="noopener" aria-label="Get directions to ${escapeHtml(addressText)}">
-                    <span class="footer-contact-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path>
-                            <path d="M19.5 10.5c0 7-7.5 11.25-7.5 11.25S4.5 17.5 4.5 10.5a7.5 7.5 0 1 1 15 0z"></path>
-                        </svg>
-                    </span>
-                    <span class="footer-contact-text">
-                        <span class="footer-contact-label">Visit us</span>
-                        <span class="footer-contact-value" data-contact-address-value>${escapeHtml(addressText)}</span>
-                    </span>
-                </a>
-            ` : ''}
-        </div>
-    `;
-
     if (authToken && currentUser) {
         footerAdminLink.innerHTML = `
-            ${contactMarkup}
             <div class="footer-admin-status">
                 <span class="footer-admin-text">You are logged in as <strong>${escapeHtml(currentUser.username)}</strong></span>
             </div>
@@ -1753,7 +1838,6 @@ function updateFooterUserInfo() {
         `;
     } else {
         footerAdminLink.innerHTML = `
-            ${contactMarkup}
             <a href="#" data-page="admin-login" id="footerAdminLink" class="admin-link footer-admin-access">Admin Access</a>
         `;
     }
