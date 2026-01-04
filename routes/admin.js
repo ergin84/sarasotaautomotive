@@ -1,6 +1,7 @@
 const express = require('express');
 const RentalRequest = require('../models/RentalRequest');
 const Car = require('../models/Car');
+const Service = require('../models/Service');
 const SiteSettings = require('../models/SiteSettings');
 const auth = require('../middleware/auth');
 const nodemailer = require('nodemailer');
@@ -31,6 +32,8 @@ router.use(auth);
 // Get dashboard stats
 router.get('/dashboard', async (req, res) => {
   try {
+    console.log('Dashboard stats requested...');
+    
     const [
       totalCarsForSale,
       availableCarsForSale,
@@ -39,7 +42,8 @@ router.get('/dashboard', async (req, res) => {
       totalRentalRequests,
       totalSaleRequests,
       newRentalRequests,
-      newSaleRequests
+      newSaleRequests,
+      totalServices
     ] = await Promise.all([
       Car.countDocuments({ type: 'sale' }),
       Car.countDocuments({ type: 'sale', status: 'available' }),
@@ -48,8 +52,11 @@ router.get('/dashboard', async (req, res) => {
       RentalRequest.countDocuments({ requestType: 'rent' }),
       RentalRequest.countDocuments({ requestType: 'sale' }),
       RentalRequest.countDocuments({ requestType: 'rent', status: 'new' }),
-      RentalRequest.countDocuments({ requestType: 'sale', status: 'new' })
+      RentalRequest.countDocuments({ requestType: 'sale', status: 'new' }),
+      Service.countDocuments()
     ]);
+
+    console.log('Services count:', totalServices);
 
     res.json({
       carsForSale: {
@@ -59,6 +66,9 @@ router.get('/dashboard', async (req, res) => {
       },
       rentCars: {
         total: totalRentCars
+      },
+      services: {
+        total: totalServices
       },
       requests: {
         rent: {
@@ -72,6 +82,7 @@ router.get('/dashboard', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Dashboard error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

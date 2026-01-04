@@ -4,6 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sarasota Automotive</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" id="metaDescription" content="Sarasota Automotive - Premium car sales and rentals in Sarasota, FL. Quality vehicles, competitive prices, excellent service.">
+    <meta name="keywords" id="metaKeywords" content="car rental Sarasota, car sales Sarasota, automotive services, used cars Sarasota, vehicle rental Florida">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="">
+    <meta property="og:title" id="ogTitle" content="Sarasota Automotive - Quality Cars for Sale and Rent">
+    <meta property="og:description" id="ogDescription" content="Premium car sales and rentals in Sarasota, FL. Browse our inventory of quality vehicles with competitive prices and excellent customer service.">
+    <meta property="og:image" id="ogImage" content="/logo.avif">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" id="twitterCard" content="summary_large_image">
+    <meta name="twitter:url" content="">
+    <meta name="twitter:title" id="twitterTitle" content="Sarasota Automotive - Quality Cars for Sale and Rent">
+    <meta name="twitter:description" id="twitterDescription" content="Premium car sales and rentals in Sarasota, FL. Browse our inventory of quality vehicles with competitive prices and excellent customer service.">
+    <meta name="twitter:image" id="twitterImage" content="/logo.avif">
+    
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,8 +66,11 @@
                 </a>
             </div>
             <div class="sidebar-footer-socials">
-                <a class="sidebar-footer-social" href="#" aria-label="Follow on Facebook">
+                <a class="sidebar-footer-social" href="https://www.facebook.com/SarasotaAutomotive/" target="_blank" rel="noopener" aria-label="Follow on Facebook">
                     <span>f</span>
+                </a>
+                <a class="sidebar-footer-social" href="https://www.yelp.com/biz/sarasota-automotive-llc-sarasota" target="_blank" rel="noopener" aria-label="Read reviews on Yelp">
+                    <span>★</span>
                 </a>
                 <a class="sidebar-footer-social" href="#" aria-label="Watch on YouTube">
                     <span>▶</span>
@@ -105,6 +127,13 @@
             </div>
         </section>
 
+        <!-- Home identity overlay -->
+        <div class="home-identity-panel">
+            <img src="logo.avif" alt="Sarasota Automotive Logo" class="home-identity-logo site-logo">
+            <h1 class="home-identity-title">Sarasota Automotive</h1>
+        </div>
+
+
         <!-- Inventory for Sale Page -->
         <section id="inventory-sale" class="page">
             <div class="page-container">
@@ -133,18 +162,45 @@
             </div>
         </div>
 
+        <!-- Image Lightbox Modal -->
+        <div id="imageLightbox" class="image-lightbox">
+            <div class="lightbox-container">
+                <button class="lightbox-close-btn" id="lightboxCloseBtn">&times;</button>
+                <button class="lightbox-nav-btn lightbox-nav-prev" id="lightboxPrevBtn" aria-label="Previous image">&#10094;</button>
+                <div class="lightbox-image-wrapper">
+                    <img id="lightboxImage" class="lightbox-image" src="" alt="Enlarged car image">
+                </div>
+                <button class="lightbox-nav-btn lightbox-nav-next" id="lightboxNextBtn" aria-label="Next image">&#10095;</button>
+                <div class="lightbox-counter" id="lightboxCounter"></div>
+            </div>
+        </div>
+
         <!-- Services Page -->
         <section id="services" class="page">
             <div class="page-container">
                 <div class="container">
-                    <h1 class="page-title">Auto Repair Shop</h1>
-                    <div class="services-intro">
-                        <p>At <i>Sarasota Automotive</i> LLC, we offer a wide range of automotive services to meet your needs. Whether you need a simple car check, tire change, oil & break checks, or a battery change, we've got you covered. Our goal is to keep your vehicle running smoothly and safely on the road.</p>
+                    <div class="services-header">
+                        <h1 class="page-title">Auto Repair Shop</h1>
+                        <p class="services-header-subtitle">Professional automotive services you can trust</p>
                     </div>
-                    <div id="servicesGrid" class="services-grid"></div>
+                    
+                    <div class="services-intro">
+                        <p>At Sarasota Automotive LLC, we offer a wide range of automotive services to meet your needs. Whether you need a simple car check, tire change, oil & break checks, or a battery change, we've got you covered. Our goal is to keep your vehicle running smoothly and safely on the road.</p>
+                    </div>
+                    
+                    <div class="services-grid" id="servicesGrid">
+                        <!-- Services will be loaded dynamically -->
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
+                            <p style="color: rgba(255,255,255,0.7); font-size: 18px;">Loading services...</p>
+                        </div>
+                    </div>
+                    
                     <div class="services-contact-cta">
-                        <p class="services-contact-text">Looking for someone to trust with your car?</p>
-                        <a href="#" data-page="contact" class="services-contact-button">CONTACT US</a>
+                        <div class="services-cta-content">
+                            <h2 class="services-cta-title">Need Expert Service?</h2>
+                            <p class="services-cta-text">Get in touch with our experienced team for any automotive service needs</p>
+                            <a href="#" data-page="contact" class="services-contact-button">Contact Our Experts</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -154,37 +210,35 @@
         <section id="service-detail" class="page">
             <div class="page-container">
                 <div class="container">
-                    <div class="service-detail-container">
-                        <button class="back-button" onclick="showPage('services'); return false;" title="Back to Services">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                            </svg>
-                            Back to Services
-                        </button>
+                    <button class="service-detail-back-btn" onclick="showPage('services'); updateActiveNavForPage('services')">
+                        <span>←</span> Back to Services
+                    </button>
+                    
+                    <div class="service-detail-main">
+                        <div class="service-detail-images-wrapper" id="serviceDetailImages">
+                            <!-- Images will be loaded here -->
+                        </div>
                         
-                        <div class="service-detail-content">
-                            <!-- Service Image Section -->
-                            <div class="service-detail-images">
-                                <div class="service-detail-main">
-                                    <img id="serviceDetailMainImage" src="" alt="Service" loading="lazy">
-                                </div>
-                                <div id="serviceDetailThumbnails" class="service-detail-thumbnails"></div>
+                        <div class="service-detail-info">
+                            <h1 class="service-detail-title" id="serviceDetailTitle">Service Detail</h1>
+                            <p class="service-detail-short" id="serviceDetailShort"></p>
+                            <div class="service-detail-full" id="serviceDetailFull"></div>
+                            
+                            <div class="service-detail-actions">
+                                <button class="service-detail-btn service-detail-btn-primary" onclick="showPage('contact'); updateActiveNavForPage('contact');">
+                                    Request This Service
+                                </button>
+                                <button class="service-detail-btn service-detail-btn-secondary" onclick="showPage('services'); updateActiveNavForPage('services');">
+                                    View Other Services
+                                </button>
                             </div>
+                        </div>
+                    </div>
 
-                            <!-- Service Info Section -->
-                            <div class="service-detail-info">
-                                <h1 id="serviceDetailTitle" class="service-detail-title">Service Name</h1>
-                                
-                                <div class="service-detail-description" id="serviceDetailDescription">
-                                    <p>Loading service details...</p>
-                                </div>
-
-                                <!-- Call to Action -->
-                                <div class="service-detail-cta">
-                                    <a href="#contact" data-page="contact" class="btn-primary" style="display: inline-block;">Request This Service</a>
-                                    <button type="button" class="btn-secondary" onclick="showPage('services'); return false;">View Other Services</button>
-                                </div>
-                            </div>
+                    <div class="service-detail-related" id="relatedServicesSection" style="display: none;">
+                        <h2>Other Services</h2>
+                        <div id="relatedServicesGrid" class="services-grid">
+                            <!-- Related services will be loaded here -->
                         </div>
                     </div>
                 </div>
@@ -243,7 +297,7 @@
                                         <div class="contact-icon">🕒</div>
                                         <div class="contact-info-text">
                                             <strong>Business Hours</strong>
-                                            <span id="businessHours">Monday - Saturday: 9:00 AM - 6:00 PM<br>Sunday: Closed</span>
+                                            <span id="businessHoursDisplay">Monday - Saturday: 9:00 AM - 6:00 PM<br>Sunday: Closed</span>
                                         </div>
                                     </div>
                                 </div>
@@ -278,87 +332,7 @@
                     <input type="password" id="adminPassword" placeholder="Password" required>
                     <button type="submit">Login</button>
                     <div id="loginError" class="error-message"></div>
-                    <div class="admin-links">
-                        <a href="#" class="admin-link" onclick="showPage('admin-forgot-password'); return false;">🔑 Forgot Password?</a>
-                    </div>
                 </form>
-                </div>
-            </div>
-        </section>
-
-        <!-- Admin Change Password -->
-        <section id="admin-change-password" class="page">
-            <div class="page-container">
-                <div class="container">
-                    <h1 class="page-title">Change Password</h1>
-                    <div class="admin-page-back">
-                        <a href="#" onclick="showPage('admin-dashboard'); return false;">← Back to Dashboard</a>
-                    </div>
-                    <form class="admin-form" id="changePasswordForm">
-                        <div class="form-group">
-                            <label for="currentPassword">Current Password</label>
-                            <input type="password" id="currentPassword" placeholder="Enter your current password" required>
-                            <small class="form-help">Required to verify your identity</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="newPassword">New Password</label>
-                            <input type="password" id="newPassword" placeholder="Enter new password" required>
-                            <small class="form-help">Min 8 characters, mix of uppercase, lowercase, numbers</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="confirmNewPassword">Confirm New Password</label>
-                            <input type="password" id="confirmNewPassword" placeholder="Confirm new password" required>
-                        </div>
-                        <div id="changePasswordError" class="error-message"></div>
-                        <div id="changePasswordSuccess" class="success-message"></div>
-                        <button type="submit" class="btn-primary">Change Password</button>
-                    </form>
-                </div>
-            </div>
-        </section>
-
-        <!-- Admin Forgot Password -->
-        <section id="admin-forgot-password" class="page">
-            <div class="page-container">
-                <div class="container">
-                    <h1 class="page-title">Reset Password</h1>
-                    <div class="admin-page-back">
-                        <a href="#" onclick="showPage('admin-login'); return false;">← Back to Login</a>
-                    </div>
-                    <form class="admin-form" id="forgotPasswordForm">
-                        <p class="form-description">Enter your username and we'll send a password reset link to your email.</p>
-                        <div class="form-group">
-                            <label for="resetUsername">Username</label>
-                            <input type="text" id="resetUsername" placeholder="Enter your username" required>
-                        </div>
-                        <div id="forgotPasswordError" class="error-message"></div>
-                        <div id="forgotPasswordSuccess" class="success-message"></div>
-                        <button type="submit" class="btn-primary">Send Reset Link</button>
-                    </form>
-                </div>
-            </div>
-        </section>
-
-        <!-- Admin Reset Password (with token) -->
-        <section id="admin-reset-password" class="page">
-            <div class="page-container">
-                <div class="container">
-                    <h1 class="page-title">Set New Password</h1>
-                    <form class="admin-form" id="resetPasswordForm">
-                        <p class="form-description">Enter your new password below.</p>
-                        <div class="form-group">
-                            <label for="resetNewPassword">New Password</label>
-                            <input type="password" id="resetNewPassword" placeholder="Enter new password" required>
-                            <small class="form-help">Min 8 characters, mix of uppercase, lowercase, numbers</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="resetConfirmPassword">Confirm Password</label>
-                            <input type="password" id="resetConfirmPassword" placeholder="Confirm new password" required>
-                        </div>
-                        <div id="resetPasswordError" class="error-message"></div>
-                        <div id="resetPasswordSuccess" class="success-message"></div>
-                        <button type="submit" class="btn-primary">Reset Password</button>
-                    </form>
                 </div>
             </div>
         </section>
@@ -373,18 +347,11 @@
                         <button class="admin-nav-btn active" data-section="dashboard">Dashboard</button>
                         <button class="admin-nav-btn" data-section="manage-sale">Manage Sale Cars</button>
                         <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
+                        <button class="admin-nav-btn" data-section="manage-services">Manage Services</button>
                         <button class="admin-nav-btn" data-section="rental-requests">Rental Requests</button>
                         <button class="admin-nav-btn" data-section="client-requests">Sale Requests</button>
-                        <button class="admin-nav-btn" data-section="manage-services">Manage Services</button>
                     </div>
                     <div class="admin-nav-right">
-                        <button class="admin-nav-btn-icon" onclick="showPage('admin-change-password'); return false;" title="Change Password">
-                            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 1s8 3 8 11v5c0 1.25-.756 2.402-2 2.816V21a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-.184C4.756 18.402 4 17.25 4 16v-5c0-8 8-11 8-11z"></path>
-                                <line x1="7" y1="10" x2="17" y2="10"></line>
-                            </svg>
-                            <span class="text">Password</span>
-                        </button>
                         <button class="admin-nav-btn-icon" data-section="site-settings" title="Site Settings">
                             <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -403,81 +370,67 @@
                     </div>
                 </div>
 
-                <!-- Dashboard Overview -->
+                <!-- Dashboard Stats -->
                 <div id="dashboard" class="admin-section active">
-                    <!-- Stats Grid -->
-                    <div class="dashboard-stats-section">
-                        <h2 class="section-title">Quick Stats</h2>
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-header">
-                                    <h3>Cars for Sale</h3>
-                                    <span class="stat-icon">🚗</span>
-                                </div>
-                                <div class="stat-body">
-                                    <div class="stat-number" id="stat-total-sale">0</div>
-                                    <div class="stat-details">
-                                        <div class="stat-detail-item">
-                                            <span class="stat-label">Available:</span>
-                                            <span class="stat-value" id="stat-available-sale-detail">0</span>
-                                        </div>
-                                        <div class="stat-detail-item">
-                                            <span class="stat-label">Sold:</span>
-                                            <span class="stat-value" id="stat-sold-detail">0</span>
-                                        </div>
-                                    </div>
-                                </div>
+                    <div class="dashboard-header">
+                        <h2 class="dashboard-subtitle">Quick Stats</h2>
+                    </div>
+                    <div class="stats-grid">
+                        <!-- Cars for Sale Card -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <h3>Cars for Sale</h3>
+                                <span class="stat-icon">🚗</span>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-header">
-                                    <h3>Cars for Rent</h3>
-                                    <span class="stat-icon">🔑</span>
+                            <div class="stat-card-value" id="stat-total-sale">1</div>
+                            <div class="stat-card-details">
+                                <div class="stat-detail-row">
+                                    <span>Available:</span>
+                                    <span id="stat-available-sale">1</span>
                                 </div>
-                                <div class="stat-body">
-                                    <div class="stat-number" id="stat-rent">0</div>
-                                    <p class="stat-desc">Available rental vehicles</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-header">
-                                    <h3>Services</h3>
-                                    <span class="stat-icon">🔧</span>
-                                </div>
-                                <div class="stat-body">
-                                    <div class="stat-number" id="stat-total-services">0</div>
-                                    <p class="stat-desc">Available repair services</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-header">
-                                    <h3>Client Requests</h3>
-                                    <span class="stat-icon">📋</span>
-                                </div>
-                                <div class="stat-body">
-                                    <div class="stat-number" id="stat-new-requests">0</div>
-                                    <p class="stat-desc">New requests awaiting review</p>
+                                <div class="stat-detail-row">
+                                    <span>Sold:</span>
+                                    <span id="stat-sold">0</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Services Preview Section -->
-                    <div class="dashboard-services-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Services Overview</h2>
-                            <button class="btn-primary btn-sm" id="dashboardAddServiceBtn">Add Service</button>
+                        <!-- Cars for Rent Card -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <h3>Cars for Rent</h3>
+                                <span class="stat-icon">🔑</span>
+                            </div>
+                            <div class="stat-card-value" id="stat-rent">0</div>
+                            <div class="stat-card-details">
+                                <span>Available rental vehicles</span>
+                            </div>
                         </div>
-                        <div id="dashboardServicesList" class="dashboard-services-grid"></div>
-                    </div>
-                </div>
 
-                <!-- Manage Services -->
-                <div id="manage-services" class="admin-section">
-                    <div class="admin-header">
-                        <h2>Manage Services</h2>
-                        <button class="btn-primary" id="addServiceBtn">Add New Service</button>
+                        <!-- Services Card -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <h3>Services</h3>
+                                <span class="stat-icon">🔧</span>
+                            </div>
+                            <div class="stat-card-value" id="stat-services">2</div>
+                            <div class="stat-card-details">
+                                <span>Available repair services</span>
+                            </div>
+                        </div>
+
+                        <!-- Client Requests Card -->
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <h3>Client Requests</h3>
+                                <span class="stat-icon">📋</span>
+                            </div>
+                            <div class="stat-card-value" id="stat-new-requests">0</div>
+                            <div class="stat-card-details">
+                                <span>New requests awaiting review</span>
+                            </div>
+                        </div>
                     </div>
-                    <div id="servicesList" class="admin-services-list"></div>
                 </div>
 
                 <!-- Manage Sale Cars -->
@@ -496,6 +449,15 @@
                         <button class="btn-primary" id="addRentCarBtn">Add New Rental Car</button>
                     </div>
                     <div id="rentCarsList" class="admin-cars-list"></div>
+                </div>
+
+                <!-- Manage Services -->
+                <div id="manage-services" class="admin-section">
+                    <div class="admin-header">
+                        <h2>Manage Services</h2>
+                        <button class="btn-primary" id="addServiceBtn">Add New Service</button>
+                    </div>
+                    <div id="servicesList" class="admin-services-list"></div>
                 </div>
 
                 <!-- Rental Requests -->
@@ -563,11 +525,24 @@
                 <!-- Site Settings -->
                 <div id="site-settings" class="admin-section">
                     <h2>Site Customization</h2>
+                    
+                    <!-- Settings Tabs -->
+                    <div class="settings-tabs">
+                        <button type="button" class="settings-tab active" data-tab="general">General</button>
+                        <button type="button" class="settings-tab" data-tab="admin">Admin</button>
+                        <button type="button" class="settings-tab" data-tab="appearance">Appearance</button>
+                        <button type="button" class="settings-tab" data-tab="seo">SEO</button>
+                        <button type="button" class="settings-tab" data-tab="social">Social Links</button>
+                        <button type="button" class="settings-tab" data-tab="api-feeds">API Feeds</button>
+                        <button type="button" class="settings-tab" data-tab="legal">Legal</button>
+                    </div>
+
                     <div id="siteSettingsError" style="display: none; background: rgba(220, 53, 69, 0.2); border: 1px solid rgba(220, 53, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 20px; color: #ff6b6b;"></div>
                     <div id="siteSettingsSuccess" style="display: none; background: rgba(40, 167, 69, 0.2); border: 1px solid rgba(40, 167, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 20px; color: #51cf66;"></div>
                     
                     <form id="siteSettingsForm" class="site-settings-form">
-                        <!-- General Settings -->
+                        <!-- General Settings Tab -->
+                        <div class="settings-tab-content active" data-tab-content="general">
                         <div class="settings-group">
                             <h3>General Settings</h3>
                             <div class="form-group">
@@ -592,21 +567,44 @@
                                 <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Used for new request alerts. Defaults to ADMIN_EMAIL env var if empty.</small>
                             </div>
                             <div class="form-group">
-                                <label for="googleAnalyticsId">Google Analytics ID</label>
-                                <input type="text" id="googleAnalyticsId" name="googleAnalyticsId" placeholder="G-XXXXXXXXXX">
-                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Leave blank to disable Analytics. Example: G-123ABC456.</small>
-                            </div>
-                            <div class="form-group">
                                 <label for="address">Address</label>
         <input type="text" id="address" name="address" placeholder="5671 McIntosh Rd Sarasota, FL 34233">
                             </div>
                             <div class="form-group">
                                 <label for="businessHours">Business Hours</label>
-                                <textarea id="businessHoursInput" name="businessHours" rows="3" placeholder="Monday - Saturday: 9:00 AM - 6:00 PM&#10;Sunday: Closed"></textarea>
-                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Use line breaks to separate days; the public page will show each line.</small>
+                                <textarea id="businessHours" name="businessHours" placeholder="Monday - Saturday: 9:00 AM - 6:00 PM&#10;Sunday: Closed" style="min-height: 100px;"></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Use line breaks to separate hours for different days</small>
                             </div>
                         </div>
+                        </div>
 
+                        <!-- Admin Tab -->
+                        <div class="settings-tab-content" data-tab-content="admin">
+                        <!-- Admin Password -->
+                        <div class="settings-group">
+                            <h3>Change Admin Password</h3>
+                            <div id="passwordChangeError" style="display: none; background: rgba(220, 53, 69, 0.2); border: 1px solid rgba(220, 53, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 15px; color: #ff6b6b;"></div>
+                            <div id="passwordChangeSuccess" style="display: none; background: rgba(40, 167, 69, 0.2); border: 1px solid rgba(40, 167, 69, 0.5); border-radius: 5px; padding: 12px; margin-bottom: 15px; color: #51cf66;"></div>
+                            
+                            <div class="form-group">
+                                <label for="currentPassword">Current Password</label>
+                                <input type="password" id="currentPassword" placeholder="Enter current password" autocomplete="current-password">
+                            </div>
+                            <div class="form-group">
+                                <label for="newPassword">New Password</label>
+                                <input type="password" id="newPassword" placeholder="Enter new password (min 6 characters)" autocomplete="new-password">
+                            </div>
+                            <div class="form-group">
+                                <label for="confirmNewPassword">Confirm New Password</label>
+                                <input type="password" id="confirmNewPassword" placeholder="Confirm new password" autocomplete="new-password">
+                            </div>
+                            <button type="button" class="btn-secondary" id="changePasswordBtn" style="background: rgba(40, 167, 69, 0.15); border: 1px solid rgba(40, 167, 69, 0.5); color: #51cf66;">Change Password</button>
+                            <small style="color: rgba(255,255,255,0.6); font-size: 13px; display: block; margin-top: 10px;">Password must be at least 6 characters long</small>
+                        </div>
+                        </div>
+
+                        <!-- Appearance Tab -->
+                        <div class="settings-tab-content" data-tab-content="appearance">
                         <!-- Logo Upload -->
                         <div class="settings-group">
                             <h3>Logo</h3>
@@ -673,8 +671,177 @@
                                 <input type="color" id="containerTextColor" name="containerTextColor" value="#e0e0e0">
                             </div>
                         </div>
+                        </div>
 
-                        <!-- Contract Terms -->
+                        <!-- SEO Tab -->
+                        <div class="settings-tab-content" data-tab-content="seo">
+                        <div class="settings-group">
+                            <h3>SEO & Analytics</h3>
+                            <div class="form-group">
+                                <label for="googleAnalyticsId">Google Analytics ID</label>
+                                <input type="text" id="googleAnalyticsId" name="googleAnalyticsId" placeholder="G-XXXXXXXXXX">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Leave blank to disable Analytics. Example: G-123ABC456.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>Meta Tags</h3>
+                            <div class="form-group">
+                                <label for="metaDescription">Meta Description</label>
+                                <textarea id="metaDescription" name="metaDescription" rows="3" placeholder="Brief description of your site for search engines (150-160 characters recommended)"></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">This appears in search engine results. Keep it between 150-160 characters for best results.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="metaKeywords">Meta Keywords</label>
+                                <input type="text" id="metaKeywords" name="metaKeywords" placeholder="car rental, car sales, Sarasota automotive">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Comma-separated keywords relevant to your business.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>Open Graph (Facebook/LinkedIn)</h3>
+                            <div class="form-group">
+                                <label for="ogTitle">OG Title</label>
+                                <input type="text" id="ogTitle" name="ogTitle" placeholder="Title when shared on social media">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Title that appears when your site is shared on Facebook, LinkedIn, etc.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="ogDescription">OG Description</label>
+                                <textarea id="ogDescription" name="ogDescription" rows="3" placeholder="Description when shared on social media"></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Description that appears when your site is shared on social platforms.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="ogImage">OG Image URL</label>
+                                <input type="text" id="ogImage" name="ogImage" placeholder="/logo.avif">
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Image URL for social media shares. Recommended size: 1200x630px.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>Twitter Card</h3>
+                            <div class="form-group">
+                                <label for="twitterCard">Twitter Card Type</label>
+                                <select id="twitterCard" name="twitterCard">
+                                    <option value="summary">Summary</option>
+                                    <option value="summary_large_image">Summary with Large Image</option>
+                                </select>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">How your content appears when shared on Twitter/X.</small>
+                            </div>
+                        </div>
+                        </div>
+
+                        <!-- Social Links Tab -->
+                        <div class="settings-tab-content" data-tab-content="social">
+                        <div class="settings-group">
+                            <h3>Social Media Links</h3>
+                            <div id="socialLinksContainer"></div>
+                            <button type="button" class="btn-secondary" id="addSocialLinkBtn" style="margin-top: 10px;">+ Add Social Link</button>
+                            <input type="hidden" id="socialLinks" name="socialLinks">
+                        </div>
+                        </div>
+
+                        <!-- API Feeds Tab -->
+                        <div class="settings-tab-content" data-tab-content="api-feeds">
+                        <div class="settings-group">
+                            <h3>📡 Marketing & Advertising Feeds</h3>
+                            <p style="color: rgba(255,255,255,0.8); margin-bottom: 20px; line-height: 1.6;">
+                                Your site automatically exposes vehicle feeds for advertising platforms. These feeds are updated in real-time whenever you add, edit, or remove vehicles marked for sale.
+                            </p>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>🔵 Google Vehicle Ads (JSON)</h3>
+                            <div class="api-feed-box">
+                                <div style="margin-bottom: 15px;">
+                                    <strong>Feed URL:</strong><br>
+                                    <code class="api-url" id="googleFeedUrl" style="display: block; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 5px; word-break: break-all; color: #85c4e4;">
+                                        https://yourdomain.com/feeds/google-vehicles.json
+                                    </code>
+                                    <button type="button" class="btn-secondary" onclick="copyToClipboard('googleFeedUrl')" style="margin-top: 10px; font-size: 13px;">📋 Copy URL</button>
+                                    <a id="googleFeedLink" href="/feeds/google-vehicles.json" target="_blank" class="btn-secondary" style="margin-top: 10px; margin-left: 10px; font-size: 13px; display: inline-block; text-decoration: none;">🔗 View Feed</a>
+                                </div>
+                                
+                                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 5px; border-left: 3px solid #4285f4;">
+                                    <strong style="color: #85c4e4;">How to Use:</strong>
+                                    <ol style="margin: 10px 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8);">
+                                        <li>Sign in to <a href="https://ads.google.com" target="_blank" style="color: #85c4e4;">Google Ads</a></li>
+                                        <li>Navigate to <strong>Tools & Settings</strong> → <strong>Business Data</strong> → <strong>Vehicle Ads</strong></li>
+                                        <li>Click <strong>+ Add Feed</strong></li>
+                                        <li>Choose <strong>Scheduled Fetch</strong> and paste the URL above</li>
+                                        <li>Set update frequency (recommended: daily)</li>
+                                        <li>Google will automatically fetch your available vehicles and create ads</li>
+                                    </ol>
+                                    <p style="margin-top: 10px; font-size: 13px; color: rgba(255,255,255,0.6);">
+                                        <strong>Note:</strong> Only vehicles marked as "For Sale" with status "Available" are included in this feed.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>📘 Facebook/Meta Vehicle Catalog (CSV)</h3>
+                            <div class="api-feed-box">
+                                <div style="margin-bottom: 15px;">
+                                    <strong>Feed URL:</strong><br>
+                                    <code class="api-url" id="metaFeedUrl" style="display: block; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-top: 5px; word-break: break-all; color: #85c4e4;">
+                                        https://yourdomain.com/feeds/meta-vehicles.csv
+                                    </code>
+                                    <button type="button" class="btn-secondary" onclick="copyToClipboard('metaFeedUrl')" style="margin-top: 10px; font-size: 13px;">📋 Copy URL</button>
+                                    <a id="metaFeedLink" href="/feeds/meta-vehicles.csv" target="_blank" class="btn-secondary" style="margin-top: 10px; margin-left: 10px; font-size: 13px; display: inline-block; text-decoration: none;">🔗 View Feed</a>
+                                </div>
+                                
+                                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 5px; border-left: 3px solid #1877f2;">
+                                    <strong style="color: #85c4e4;">How to Use:</strong>
+                                    <ol style="margin: 10px 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8);">
+                                        <li>Go to <a href="https://business.facebook.com/commerce" target="_blank" style="color: #85c4e4;">Facebook Commerce Manager</a></li>
+                                        <li>Select your Business Account or create one</li>
+                                        <li>Click <strong>Catalog</strong> → <strong>Add Items</strong></li>
+                                        <li>Choose <strong>Data Feed</strong> as the upload method</li>
+                                        <li>Select <strong>Scheduled Feed</strong> and paste the URL above</li>
+                                        <li>Choose <strong>CSV</strong> format</li>
+                                        <li>Set update schedule (recommended: daily at 3 AM)</li>
+                                        <li>Connect your catalog to Facebook/Instagram ads</li>
+                                    </ol>
+                                    <p style="margin-top: 10px; font-size: 13px; color: rgba(255,255,255,0.6);">
+                                        <strong>Note:</strong> The CSV format follows Facebook's Vehicle Catalog specifications. Only available vehicles for sale are included.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>ℹ️ Feed Information</h3>
+                            <div style="background: rgba(133, 196, 228, 0.1); padding: 15px; border-radius: 5px; border-left: 3px solid #85c4e4;">
+                                <ul style="margin: 0 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8);">
+                                    <li><strong>Automatic Updates:</strong> Feeds update in real-time when you modify vehicle inventory</li>
+                                    <li><strong>Public Access:</strong> These URLs are publicly accessible (no authentication required)</li>
+                                    <li><strong>Included Vehicles:</strong> Only "For Sale" vehicles with "Available" status</li>
+                                    <li><strong>Data Included:</strong> Make, model, year, price, images, mileage, fuel type, transmission, description</li>
+                                    <li><strong>Image URLs:</strong> All image URLs are automatically converted to absolute URLs</li>
+                                    <li><strong>Performance:</strong> Feeds are optimized and cached for fast delivery</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <h3>🔧 Testing Your Feeds</h3>
+                            <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 5px;">
+                                <p style="color: rgba(255,255,255,0.8); margin-bottom: 10px;">
+                                    Before submitting to advertising platforms, test your feeds:
+                                </p>
+                                <ul style="margin: 0 0 0 20px; line-height: 1.8; color: rgba(255,255,255,0.8);">
+                                    <li>Click the <strong>"View Feed"</strong> buttons above to preview the data</li>
+                                    <li>Verify that your vehicles appear with correct information</li>
+                                    <li>Check that images load properly</li>
+                                    <li>Ensure prices and descriptions are accurate</li>
+                                </ul>
+                            </div>
+                        </div>
+                        </div>
+
+                        <!-- Legal Tab -->
+                        <div class="settings-tab-content" data-tab-content="legal">
+                        <!-- Rental Contract Terms -->
                         <div class="settings-group">
                             <h3>Rental Contract Terms & Conditions</h3>
                             <div class="form-group">
@@ -701,9 +868,10 @@
                                 <small style="color: rgba(255,255,255,0.6); font-size: 13px;">This content will be displayed on the Privacy Policy page. Use line breaks to separate paragraphs. You can format sections with headings using markdown-style formatting or plain text.</small>
                             </div>
                         </div>
+                        </div>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn-primary" id="saveSettingsBtn">Save Settings</button>
+                            <button type="submit" class="btn-primary">Save Settings</button>
                             <button type="button" class="btn-secondary" id="resetSettingsBtn">Reset to Defaults</button>
                         </div>
                     </form>
@@ -802,7 +970,7 @@
                         <div class="form-group">
                             <label>Upload Photos</label>
                             <input type="file" id="carImages" multiple accept="image/*">
-                            <div id="imagePreview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 10px;"></div>
+                            <div id="imagePreview" class="image-preview-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 10px;"></div>
                         </div>
                     </div>
                     
@@ -846,7 +1014,7 @@
                         <div class="form-group">
                             <label>Upload Photos</label>
                             <input type="file" id="carImagesRent" multiple accept="image/*">
-                            <div id="imagePreviewRent" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 10px;"></div>
+                            <div id="imagePreviewRent" class="image-preview-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 10px;"></div>
                         </div>
                     </div>
                     
@@ -898,27 +1066,52 @@
         </div>
     </div>
 
-    <!-- Lightbox Modal for Car Image Gallery -->
-    <div id="imageLightbox" class="image-lightbox">
-        <div class="lightbox-content">
-            <button id="lightboxCloseBtn" class="lightbox-close" aria-label="Close lightbox">&times;</button>
-            <button id="lightboxPrevBtn" class="lightbox-nav lightbox-prev" aria-label="Previous image">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-            </button>
-            <img id="lightboxImage" src="" alt="Lightbox image" class="lightbox-image">
-            <button id="lightboxNextBtn" class="lightbox-nav lightbox-next" aria-label="Next image">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-            </button>
-            <div class="lightbox-counter" id="lightboxCounter">1 of 1</div>
+    <!-- Service Form Modal -->
+    <div id="serviceFormModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close-modal" data-modal="serviceFormModal">&times;</span>
+            <h2 class="modal-title">Add New Service</h2>
+            <form id="serviceForm">
+                <div class="form-group">
+                    <label for="serviceTitle">Title *</label>
+                    <input type="text" id="serviceTitle" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="serviceShortDesc">Short Description *</label>
+                    <textarea id="serviceShortDesc" name="shortDescription" rows="2" maxlength="200" required></textarea>
+                    <small style="color: var(--text-gray);">Max 200 characters</small>
+                </div>
+                <div class="form-group">
+                    <label for="serviceFullDesc">Full Description *</label>
+                    <textarea id="serviceFullDesc" name="fullDescription" rows="6" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="serviceIcon">Icon Class (FontAwesome)</label>
+                    <input type="text" id="serviceIcon" name="icon" placeholder="fas fa-cog">
+                    <small style="color: var(--text-gray);">Example: fas fa-car, fas fa-wrench, fas fa-oil-can</small>
+                </div>
+                <div class="form-group">
+                    <label>Upload Photos</label>
+                    <input type="file" id="serviceImages" multiple accept="image/*">
+                    <div id="serviceImagePreview" class="image-preview-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 10px;"></div>
+                </div>
+                <div class="form-group">
+                    <label for="serviceOrder">Display Order</label>
+                    <input type="number" id="serviceOrder" name="order" value="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="serviceIsActive" name="isActive" checked>
+                        <span>Active</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn-primary">Save Service</button>
+                <button type="button" class="btn-cancel" onclick="closeModal('serviceFormModal')">Cancel</button>
+            </form>
         </div>
     </div>
 
-    <script src="js/modules/lightbox.js"></script>
-    <script src="app.legacy.js"></script>
+    <script src="app.js"></script>
 
     <div id="cookieConsentBar" class="cookie-consent hidden" role="region" aria-label="Cookie consent banner">
         <div class="cookie-consent-content">

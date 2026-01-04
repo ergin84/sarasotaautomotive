@@ -83,9 +83,20 @@ router.post('/change-password', auth, async (req, res) => {
       return res.status(400).json({ message: 'New password must be at least 6 characters long' });
     }
 
-    const user = await User.findById(req.user.userId);
+    console.log('Change password request - User info from token:', req.user);
+    
+    // Try to find user by userId or username
+    let user = await User.findById(req.user.userId);
+    
+    // If not found by ID, try by username as fallback
+    if (!user && req.user.username) {
+      console.log('User not found by ID, trying username:', req.user.username);
+      user = await User.findOne({ username: req.user.username });
+    }
+    
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      console.error('User not found. Token userId:', req.user.userId, 'username:', req.user.username);
+      return res.status(404).json({ message: 'User not found. Please log out and log in again.' });
     }
 
     const isMatch = await user.comparePassword(currentPassword);

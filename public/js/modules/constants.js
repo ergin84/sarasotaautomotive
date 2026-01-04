@@ -41,3 +41,16 @@ export const VEHICLE_OPTIONS = [
     { value: 'bus', label: 'Bus' },
     { value: 'other', label: 'Other' }
 ];
+
+// Global state management
+export const appState = {
+    authToken: localStorage.getItem('authToken'),
+    currentUser: JSON.parse(localStorage.getItem('currentUser') || 'null'),
+    currentPage: 'home',
+    googleAnalyticsId: '',
+    currentAnalyticsId: '',
+    requestPaginationState: {
+        rent: { page: 1, totalPages: 1, total: 0 },
+        sale: { page: 1, totalPages: 1, total: 0 }
+    }
+};

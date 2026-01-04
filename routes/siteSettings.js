@@ -42,6 +42,12 @@ router.put('/', auth, async (req, res) => {
         } else {
             // Apply incoming fields without overriding schema strictness
             settings.set(req.body);
+            
+            // Explicitly handle socialLinks array to ensure it's properly set
+            if (req.body.socialLinks && Array.isArray(req.body.socialLinks)) {
+                settings.socialLinks = req.body.socialLinks;
+                console.log('Updated socialLinks:', settings.socialLinks);
+            }
         }
 
         if (!settings.backgroundImageUrl) {
@@ -52,7 +58,7 @@ router.put('/', auth, async (req, res) => {
         }
 
         await settings.save();
-        console.log('Settings saved successfully');
+        console.log('Settings saved successfully', { hasocialLinks: !!settings.socialLinks, count: settings.socialLinks?.length });
         res.json(settings.toObject());
     } catch (error) {
         console.error('Error updating site settings:', error);

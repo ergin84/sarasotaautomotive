@@ -30,8 +30,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await verifySession();
     // Update footer after session verification
     updateFooterUserInfo();
-    // Always load DB-backed site settings on startup
-    initializeSiteSettings();
     initializeNavigation();
     initializeCookieConsent();
     initializeModals();
@@ -199,16 +197,29 @@ function initializeNavigation() {
         });
     }
 
-    // Hamburger/X menu toggle - click still works
+    // Track if a touch event just occurred to prevent hover simulation on mobile
+    let lastTouchTime = 0;
+    
+    // Hamburger/X menu toggle - click works on both desktop and mobile
     menuToggle?.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleSidebar();
     });
 
-    // Open menu on hover (mouseenter)
+    // Detect touch events to prevent hover simulation
+    menuToggle?.addEventListener('touchstart', () => {
+        lastTouchTime = Date.now();
+    }, { passive: true });
+
+    // Open menu on hover (mouseenter) - but only on desktop
     let menuHoverTimeout = null;
     
     menuToggle?.addEventListener('mouseenter', () => {
+        // Ignore mouseenter if it's from a touch event (within 500ms of touch)
+        if (Date.now() - lastTouchTime < 500) {
+            return;
+        }
+        
         // Clear any pending close timeout
         if (menuHoverTimeout) {
             clearTimeout(menuHoverTimeout);
@@ -221,8 +232,12 @@ function initializeNavigation() {
     });
 
     // Close menu when mouse leaves menu area (both sidebar and toggle button)
-    // Create a wrapper element to detect mouse leaving the entire menu area
     function handleMenuMouseLeave() {
+        // Don't auto-close on touch devices
+        if (Date.now() - lastTouchTime < 500) {
+            return;
+        }
+        
         menuHoverTimeout = setTimeout(() => {
             if (document.body.classList.contains('menu-open')) {
                 closeSidebar();
@@ -366,6 +381,72 @@ function enableAnalytics() {
     currentAnalyticsId = trimmedId;
 }
 
+function updateMetaTags(settings) {
+    // Update meta description
+    if (settings.metaDescription) {
+        const metaDesc = document.getElementById('metaDescription');
+        if (metaDesc) metaDesc.setAttribute('content', settings.metaDescription);
+    }
+    
+    // Update meta keywords
+    if (settings.metaKeywords) {
+        const metaKeywords = document.getElementById('metaKeywords');
+        if (metaKeywords) metaKeywords.setAttribute('content', settings.metaKeywords);
+    }
+    
+    // Update Open Graph tags
+    if (settings.ogTitle) {
+        const ogTitle = document.getElementById('ogTitle');
+        if (ogTitle) ogTitle.setAttribute('content', settings.ogTitle);
+        
+        // Also update Twitter title
+        const twitterTitle = document.getElementById('twitterTitle');
+        if (twitterTitle) twitterTitle.setAttribute('content', settings.ogTitle);
+    }
+    
+    if (settings.ogDescription) {
+        const ogDesc = document.getElementById('ogDescription');
+        if (ogDesc) ogDesc.setAttribute('content', settings.ogDescription);
+        
+        // Also update Twitter description
+        const twitterDesc = document.getElementById('twitterDescription');
+        if (twitterDesc) twitterDesc.setAttribute('content', settings.ogDescription);
+    }
+    
+    if (settings.ogImage) {
+        const ogImg = document.getElementById('ogImage');
+        if (ogImg) {
+            // Make sure image URL is absolute
+            const imageUrl = settings.ogImage.startsWith('http') 
+                ? settings.ogImage 
+                : window.location.origin + settings.ogImage;
+            ogImg.setAttribute('content', imageUrl);
+        }
+        
+        // Also update Twitter image
+        const twitterImg = document.getElementById('twitterImage');
+        if (twitterImg) {
+            const imageUrl = settings.ogImage.startsWith('http') 
+                ? settings.ogImage 
+                : window.location.origin + settings.ogImage;
+            twitterImg.setAttribute('content', imageUrl);
+        }
+    }
+    
+    // Update Twitter card type
+    if (settings.twitterCard) {
+        const twitterCard = document.getElementById('twitterCard');
+        if (twitterCard) twitterCard.setAttribute('content', settings.twitterCard);
+    }
+    
+    // Update OG URL with current page URL
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) ogUrl.setAttribute('content', window.location.href);
+    
+    const twitterUrl = document.querySelector('meta[name="twitter:url"]');
+    if (twitterUrl) twitterUrl.setAttribute('content', window.location.href);
+}
+
 function showPage(pageId) {
     // Hide all pages
     document.querySelectorAll('.page').forEach(page => {
@@ -377,13 +458,6 @@ function showPage(pageId) {
         document.body.classList.add('home-page-active');
     } else {
         document.body.classList.remove('home-page-active');
-    }
-
-    // Check authentication for protected pages
-    const protectedPages = ['admin-dashboard', 'admin-change-password'];
-    if (protectedPages.includes(pageId) && !authToken) {
-        showPage('admin-login');
-        return;
     }
 
     // Show selected page
@@ -410,6 +484,8 @@ function showPage(pageId) {
             loadCarsForSale();
         } else if (pageId === 'inventory-rent') {
             loadCarsForRent();
+        } else if (pageId === 'services') {
+            loadServices();
         } else if (pageId === 'admin-dashboard' && authToken) {
             loadAdminDashboard();
         } else if (pageId === 'privacy') {
@@ -427,29 +503,16 @@ function updateActiveNav(activeLink) {
 
 function loadInitialPage() {
     const hash = window.location.hash.slice(1);
-    
-    // Check for reset password token in URL (e.g., ?token=abc123)
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('token')) {
-        showPage('admin-reset-password');
-        return;
-    }
-    
     if (hash && document.getElementById(hash)) {
         // Check if user is authenticated for admin pages
-        const protectedPages = ['admin-dashboard', 'admin-change-password'];
-        if (protectedPages.includes(hash)) {
-            if (!authToken) {
+        if (hash === 'admin-dashboard' || hash === 'admin-login') {
+            if (hash === 'admin-dashboard' && !authToken) {
                 showPage('admin-login');
                 updateActiveNavForPage('admin-login');
             } else {
                 showPage(hash);
                 updateActiveNavForPage(hash);
             }
-        } else if (hash === 'admin-login' || hash === 'admin-forgot-password') {
-            // These pages are public but admin-related
-            showPage(hash);
-            updateActiveNavForPage(hash);
         } else {
             showPage(hash);
             updateActiveNavForPage(hash);
@@ -501,6 +564,48 @@ function initializeModals() {
             }
         });
     });
+
+    // Initialize lightbox controls
+    const lightbox = document.getElementById('imageLightbox');
+    const lightboxCloseBtn = document.getElementById('lightboxCloseBtn');
+    const lightboxPrevBtn = document.getElementById('lightboxPrevBtn');
+    const lightboxNextBtn = document.getElementById('lightboxNextBtn');
+
+    if (lightboxCloseBtn) {
+        lightboxCloseBtn.addEventListener('click', closeLightbox);
+    }
+
+    if (lightboxPrevBtn) {
+        lightboxPrevBtn.addEventListener('click', prevLightboxImage);
+    }
+
+    if (lightboxNextBtn) {
+        lightboxNextBtn.addEventListener('click', nextLightboxImage);
+    }
+
+    // Close lightbox when clicking outside the image
+    if (lightbox) {
+        lightbox.addEventListener('click', (e) => {
+            if (e.target === lightbox) {
+                closeLightbox();
+            }
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!lightbox.classList.contains('active')) return;
+            
+            if (e.key === 'Escape') {
+                closeLightbox();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevLightboxImage();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                nextLightboxImage();
+            }
+        });
+    }
 }
 
 function closeModal(modalId) {
@@ -637,6 +742,50 @@ async function loadCarsForRent() {
     }
 }
 
+// Load Services
+async function loadServices() {
+    try {
+        const response = await fetch(`${API_BASE}/services`);
+        const services = await response.json();
+        displayServices(services);
+    } catch (error) {
+        console.error('Error loading services:', error);
+    }
+}
+
+// Display Services
+function displayServices(services) {
+    const container = document.getElementById('servicesGrid');
+    if (!container) return;
+
+    if (!services || services.length === 0) {
+        container.innerHTML = `
+            <div class="services-empty">
+                <h3>No services available</h3>
+                <p>We currently do not have any services listed. Please check back soon!</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = services.map(service => {
+        const mainImage = service.mainImage || (service.images && service.images.length > 0 ? service.images[0] : '/images/no-image.svg');
+        
+        return `
+        <div class="service-card" style="cursor: pointer;" onclick="showServiceDetail('${service._id}');">
+            ${mainImage ? `<img src="${mainImage}" alt="${service.title}" class="service-image" onerror="this.src='/images/no-image.svg'">` : ''}
+            <div class="service-card-content">
+                <div class="service-icon">
+                    <i class="${service.icon || 'fas fa-cog'}"></i>
+                </div>
+                <h3 class="service-title">${service.title}</h3>
+                <p class="service-description">${service.shortDescription}</p>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
 // Display Cars
 function displayCars(cars, containerId, type) {
     const container = document.getElementById(containerId);
@@ -693,6 +842,67 @@ function displayCars(cars, containerId, type) {
         </div>
         `;
     }).join('');
+}
+
+// Lightbox functionality
+let currentLightboxIndex = 0;
+let lightboxImages = [];
+
+function openImageLightbox(images, startIndex = 0) {
+    lightboxImages = images || [];
+    currentLightboxIndex = startIndex;
+    const lightbox = document.getElementById('imageLightbox');
+    
+    if (lightbox && lightboxImages.length > 0) {
+        updateLightboxImage();
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById('imageLightbox');
+    if (lightbox) {
+        lightbox.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+function updateLightboxImage() {
+    const lightboxImage = document.getElementById('lightboxImage');
+    const lightboxCounter = document.getElementById('lightboxCounter');
+    const prevBtn = document.getElementById('lightboxPrevBtn');
+    const nextBtn = document.getElementById('lightboxNextBtn');
+    
+    if (lightboxImage && lightboxImages.length > 0) {
+        lightboxImage.src = lightboxImages[currentLightboxIndex];
+        lightboxImage.alt = `Car image ${currentLightboxIndex + 1} of ${lightboxImages.length}`;
+        
+        if (lightboxCounter) {
+            lightboxCounter.textContent = `${currentLightboxIndex + 1} of ${lightboxImages.length}`;
+        }
+        
+        if (prevBtn) {
+            prevBtn.disabled = currentLightboxIndex === 0;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = currentLightboxIndex === lightboxImages.length - 1;
+        }
+    }
+}
+
+function nextLightboxImage() {
+    if (currentLightboxIndex < lightboxImages.length - 1) {
+        currentLightboxIndex++;
+        updateLightboxImage();
+    }
+}
+
+function prevLightboxImage() {
+    if (currentLightboxIndex > 0) {
+        currentLightboxIndex--;
+        updateLightboxImage();
+    }
 }
 
 // Show Car Details
@@ -838,16 +1048,38 @@ async function showCarDetails(carId, type) {
 
         const mainImage = detailsContainer.querySelector('#carDetailMainImage');
         const thumbnails = detailsContainer.querySelectorAll('.car-detail-thumb');
+        
+        // Track the current displayed image index
+        let currentImageIndex = 0;
+        
+        // Update main image and sync thumbnails
+        const updateMainImage = (newImage) => {
+            if (mainImage && newImage) {
+                mainImage.src = newImage;
+                currentImageIndex = images.indexOf(newImage);
+            }
+            thumbnails.forEach(btn => {
+                if (btn.getAttribute('data-image') === newImage) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        };
+        
         thumbnails.forEach(thumb => {
             thumb.addEventListener('click', () => {
                 const newImage = thumb.getAttribute('data-image');
-                if (mainImage && newImage) {
-                    mainImage.src = newImage;
-                }
-                thumbnails.forEach(btn => btn.classList.remove('active'));
-                thumb.classList.add('active');
+                updateMainImage(newImage);
             });
         });
+
+        // Add lightbox functionality to main image
+        if (mainImage) {
+            mainImage.addEventListener('click', () => {
+                openImageLightbox(images, currentImageIndex);
+            });
+        }
 
         const requestButton = detailsContainer.querySelector('#openRequestFormBtn');
         const requestPanel = detailsContainer.querySelector('#carRequestPanel');
@@ -875,6 +1107,139 @@ async function showCarDetails(carId, type) {
     } catch (error) {
         console.error('Error loading car details:', error);
         alert('Error loading car details');
+    }
+}
+
+async function showServiceDetail(serviceId) {
+    try {
+        console.log('showServiceDetail called with:', serviceId);
+        const response = await fetch(`${API_BASE}/services/${serviceId}`);
+        console.log('API response:', response);
+        if (!response.ok) {
+            throw new Error('Service not found');
+        }
+
+        const service = await response.json();
+        console.log('Service data:', service);
+        
+        // Get the service detail elements
+        const titleElement = document.getElementById('serviceDetailTitle');
+        const imagesElement = document.getElementById('serviceDetailImages');
+        const shortElement = document.getElementById('serviceDetailShort');
+        const fullElement = document.getElementById('serviceDetailFull');
+        const relatedElement = document.getElementById('relatedServicesGrid');
+        const relatedSection = document.getElementById('relatedServicesSection');
+
+        if (!titleElement) {
+            console.error('Service detail elements not found');
+            return;
+        }
+
+        // Set title and description
+        titleElement.textContent = service.title;
+        if (shortElement) {
+            shortElement.textContent = service.shortDescription;
+        }
+        if (fullElement) {
+            fullElement.innerHTML = service.fullDescription;
+        }
+
+        // Collect all images in order
+        const allImages = [];
+        if (service.mainImage && !allImages.includes(service.mainImage)) {
+            allImages.push(service.mainImage);
+        }
+        if (service.images && Array.isArray(service.images)) {
+            service.images.forEach(img => {
+                if (img && !allImages.includes(img)) {
+                    allImages.push(img);
+                }
+            });
+        }
+
+        // Build images HTML with thumbnails for multiple images
+        let imagesHtml = '';
+        if (allImages.length > 0) {
+            // Main image
+            imagesHtml += `<img src="${allImages[0]}" alt="${service.title}" class="service-detail-image service-detail-main-image" style="cursor: pointer;" onerror="this.src='/images/no-image.svg'">`;
+            
+            // Thumbnails if multiple images
+            if (allImages.length > 1) {
+                imagesHtml += `<div class="service-detail-thumbnails">`;
+                allImages.forEach((img, index) => {
+                    imagesHtml += `<img src="${img}" alt="${service.title} ${index + 1}" class="service-detail-thumbnail" data-index="${index}" onerror="this.src='/images/no-image.svg'">`;
+                });
+                imagesHtml += `</div>`;
+            }
+        } else {
+            imagesHtml = `<img src="/images/no-image.svg" alt="${service.title}" class="service-detail-image">`;
+        }
+
+        // Update DOM with images
+        if (imagesElement) {
+            imagesElement.innerHTML = imagesHtml;
+            
+            // Add event listeners for image clicks
+            const mainImage = imagesElement.querySelector('.service-detail-main-image');
+            const thumbnails = imagesElement.querySelectorAll('.service-detail-thumbnail');
+            
+            if (mainImage) {
+                mainImage.addEventListener('click', () => {
+                    openImageLightbox(allImages, 0);
+                });
+            }
+            
+            thumbnails.forEach(thumb => {
+                thumb.addEventListener('click', function() {
+                    const index = parseInt(this.getAttribute('data-index'), 10);
+                    openImageLightbox(allImages, index);
+                });
+            });
+        }
+
+        // Load related services
+        if (relatedElement) {
+            try {
+                const allServicesResponse = await fetch(`${API_BASE}/services`);
+                if (allServicesResponse.ok) {
+                    const allServices = await allServicesResponse.json();
+                    // Get other services (excluding current one)
+                    const relatedServices = allServices.filter(s => s._id !== serviceId).slice(0, 3);
+                    
+                    if (relatedServices.length > 0 && relatedSection) {
+                        relatedSection.style.display = 'block';
+                        relatedElement.innerHTML = relatedServices.map(relService => {
+                            const relMainImage = relService.mainImage || (relService.images && relService.images.length > 0 ? relService.images[0] : '/images/no-image.svg');
+                            return `
+                            <div class="service-card" onclick="showServiceDetail('${relService._id}');" style="cursor: pointer;">
+                                ${relMainImage ? `<img src="${relMainImage}" alt="${relService.title}" class="service-image" onerror="this.src='/images/no-image.svg'">` : ''}
+                                <div class="service-card-content">
+                                    <div class="service-icon">
+                                        <i class="${relService.icon || 'fas fa-cog'}"></i>
+                                    </div>
+                                    <h3 class="service-title">${relService.title}</h3>
+                                    <p class="service-description">${relService.shortDescription}</p>
+                                </div>
+                            </div>
+                            `;
+                        }).join('');
+                    } else if (relatedSection) {
+                        relatedSection.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading related services:', error);
+            }
+        }
+
+        // Show the service detail page
+        console.log('About to call showPage with service-detail');
+        showPage('service-detail');
+        console.log('showPage called, current page:', currentPage);
+        updateActiveNavForPage('services');
+    } catch (error) {
+        console.error('Error loading service details:', error);
+        alert('Error loading service details');
     }
 }
 
@@ -1031,210 +1396,6 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
     }
 });
 
-// Change Password Form
-document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const currentPassword = document.getElementById('currentPassword').value;
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
-    const errorDiv = document.getElementById('changePasswordError');
-    const successDiv = document.getElementById('changePasswordSuccess');
-    
-    // Clear previous messages
-    errorDiv.classList.remove('show');
-    successDiv.classList.remove('show');
-    
-    // Validate passwords match
-    if (newPassword !== confirmNewPassword) {
-        errorDiv.textContent = 'New passwords do not match';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    // Validate password strength (min 8 chars, uppercase, lowercase, number)
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-    if (!passwordRegex.test(newPassword)) {
-        errorDiv.textContent = 'Password must have at least 8 characters, including uppercase, lowercase, and a number';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    try {
-        console.log('Attempting password change...');
-        console.log('Token present:', !!authToken);
-        
-        const response = await fetch(`${API_BASE}/auth/change-password`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-                currentPassword,
-                newPassword
-            })
-        });
-        
-        const data = await response.json();
-        console.log('Response status:', response.status);
-        console.log('Response data:', data);
-        
-        if (response.ok) {
-            successDiv.innerHTML = '<strong>✓ Success!</strong> Your password has been changed successfully. Redirecting...';
-            successDiv.classList.add('show');
-            document.getElementById('changePasswordForm').reset();
-            
-            // Show a toast notification
-            showPasswordChangeToast('Password changed successfully!');
-            
-            setTimeout(() => {
-                successDiv.classList.remove('show');
-                showPage('admin-dashboard');
-            }, 2000);
-        } else {
-            errorDiv.textContent = data.message || 'Failed to change password';
-            errorDiv.classList.add('show');
-        }
-    } catch (error) {
-        errorDiv.textContent = 'Error connecting to server';
-        errorDiv.classList.add('show');
-    }
-});
-
-// Forgot Password Form
-document.getElementById('forgotPasswordForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const resetUsername = document.getElementById('resetUsername').value;
-    const errorDiv = document.getElementById('forgotPasswordError');
-    const successDiv = document.getElementById('forgotPasswordSuccess');
-    
-    // Clear previous messages
-    errorDiv.classList.remove('show');
-    successDiv.classList.remove('show');
-    
-    try {
-        const response = await fetch(`${API_BASE}/auth/forgot-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: resetUsername })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            successDiv.textContent = '✓ If an account exists with that username, you will receive a password reset email shortly.';
-            successDiv.classList.add('show');
-            document.getElementById('forgotPasswordForm').reset();
-            setTimeout(() => {
-                showPage('admin-login');
-            }, 3000);
-        } else {
-            // Always show same message for security (don't reveal user existence)
-            successDiv.textContent = '✓ If an account exists with that username, you will receive a password reset email shortly.';
-            successDiv.classList.add('show');
-            document.getElementById('forgotPasswordForm').reset();
-        }
-    } catch (error) {
-        errorDiv.textContent = 'Error connecting to server';
-        errorDiv.classList.add('show');
-    }
-});
-
-// Reset Password Form (with token from URL)
-document.getElementById('resetPasswordForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const resetNewPassword = document.getElementById('resetNewPassword').value;
-    const resetConfirmPassword = document.getElementById('resetConfirmPassword').value;
-    const errorDiv = document.getElementById('resetPasswordError');
-    const successDiv = document.getElementById('resetPasswordSuccess');
-    
-    // Clear previous messages
-    errorDiv.classList.remove('show');
-    successDiv.classList.remove('show');
-    
-    // Get token from URL
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    
-    if (!token) {
-        errorDiv.textContent = 'Invalid or missing reset token. Please request a new password reset link.';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    // Validate passwords match
-    if (resetNewPassword !== resetConfirmPassword) {
-        errorDiv.textContent = 'Passwords do not match';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    // Validate password strength
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-    if (!passwordRegex.test(resetNewPassword)) {
-        errorDiv.textContent = 'Password must have at least 8 characters, including uppercase, lowercase, and a number';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/auth/reset-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                token,
-                newPassword: resetNewPassword
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            successDiv.textContent = '✓ Password reset successfully! Redirecting to login...';
-            successDiv.classList.add('show');
-            setTimeout(() => {
-                // Remove token from URL and redirect to login
-                window.history.replaceState({}, document.title, window.location.pathname);
-                showPage('admin-login');
-            }, 2000);
-        } else {
-            errorDiv.textContent = data.message || 'Failed to reset password. Token may have expired.';
-            errorDiv.classList.add('show');
-        }
-    } catch (error) {
-        errorDiv.textContent = 'Error connecting to server';
-        errorDiv.classList.add('show');
-    }
-});
-
-// Show toast notification for password change
-function showPasswordChangeToast(message) {
-    // Create toast element if it doesn't exist
-    let toast = document.getElementById('passwordChangeToast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'passwordChangeToast';
-        toast.className = 'password-change-toast';
-        document.body.appendChild(toast);
-    }
-    
-    toast.innerHTML = `
-        <div class="toast-icon">🔐</div>
-        <div class="toast-content">
-            <strong>Password Updated</strong>
-            <p>${message}</p>
-        </div>
-    `;
-    toast.classList.add('show');
-    
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 3000);
-}
-
 // Contact Form Submission
 document.getElementById('contactForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1367,6 +1528,8 @@ function initializeAdmin() {
                         loadAdminCars('sale');
                     } else if (section === 'manage-rent') {
                         loadAdminCars('rent');
+                    } else if (section === 'manage-services') {
+                        loadAdminServices();
                     } else if (section === 'rental-requests') {
                         initializeRentalCalendarView();
                         loadClientRequests('rent');
@@ -1400,6 +1563,19 @@ function initializeAdmin() {
     // Car form submit
     document.getElementById('carForm')?.addEventListener('submit', handleCarFormSubmit);
 
+    // Add service button
+    document.getElementById('addServiceBtn')?.addEventListener('click', () => {
+        openServiceForm();
+    });
+
+    // Service form submit
+    document.getElementById('serviceForm')?.addEventListener('submit', handleServiceFormSubmit);
+
+    // Service image upload
+    document.getElementById('serviceImages')?.addEventListener('change', handleServiceImageUpload);
+
+    // Site Settings
+    initializeSiteSettings();
 }
 
 // Site Settings Functions
@@ -1489,6 +1665,118 @@ function initializeSiteSettings() {
 
     // Reset button
     document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSiteSettings);
+
+    // Add social link button
+    document.getElementById('addSocialLinkBtn')?.addEventListener('click', addNewSocialLink);
+
+    // Change password button
+    document.getElementById('changePasswordBtn')?.addEventListener('click', handleChangePassword);
+
+    // Settings tabs
+    const settingsTabs = document.querySelectorAll('.settings-tab');
+    settingsTabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const tabName = e.target.getAttribute('data-tab');
+            switchSettingsTab(tabName);
+        });
+    });
+}
+
+function switchSettingsTab(tabName) {
+    // Remove active class from all tabs and contents
+    document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.settings-tab-content').forEach(content => content.classList.remove('active'));
+    
+    // Add active class to clicked tab and corresponding content
+    const activeTab = document.querySelector(`.settings-tab[data-tab="${tabName}"]`);
+    const activeContent = document.querySelector(`.settings-tab-content[data-tab-content="${tabName}"]`);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+    
+    // Update API feed URLs when switching to api-feeds tab
+    if (tabName === 'api-feeds') {
+        updateApiFeedUrls();
+    }
+}
+
+function updateApiFeedUrls() {
+    const baseUrl = window.location.origin;
+    
+    const googleFeedUrl = document.getElementById('googleFeedUrl');
+    if (googleFeedUrl) {
+        googleFeedUrl.textContent = `${baseUrl}/feeds/google-vehicles.json`;
+    }
+    
+    const metaFeedUrl = document.getElementById('metaFeedUrl');
+    if (metaFeedUrl) {
+        metaFeedUrl.textContent = `${baseUrl}/feeds/meta-vehicles.csv`;
+    }
+    
+    const googleFeedLink = document.getElementById('googleFeedLink');
+    if (googleFeedLink) {
+        googleFeedLink.href = `${baseUrl}/feeds/google-vehicles.json`;
+    }
+    
+    const metaFeedLink = document.getElementById('metaFeedLink');
+    if (metaFeedLink) {
+        metaFeedLink.href = `${baseUrl}/feeds/meta-vehicles.csv`;
+    }
+}
+
+// Global function for copying feed URLs to clipboard
+window.copyToClipboard = function(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const text = element.textContent;
+    
+    // Modern clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopySuccess(element);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            fallbackCopy(text);
+        });
+    } else {
+        // Fallback for older browsers
+        fallbackCopy(text);
+    }
+};
+
+function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+        document.execCommand('copy');
+        const element = document.activeElement;
+        showCopySuccess(element);
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+    }
+    
+    document.body.removeChild(textarea);
+}
+
+function showCopySuccess(element) {
+    // Find the nearest button that triggered the copy
+    const button = element.closest('.api-feed-box')?.querySelector('button[onclick*="copyToClipboard"]');
+    if (button) {
+        const originalText = button.textContent;
+        button.textContent = '✅ Copied!';
+        button.style.background = 'rgba(40, 167, 69, 0.3)';
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '';
+        }, 2000);
+    }
 }
 
 function setupColorPickerSync(colorPickerId, textInputId, defaultOpacity = 0.65) {
@@ -1603,9 +1891,18 @@ function populateSiteSettingsForm(settings) {
     document.getElementById('emailAddress').value = settings.emailAddress || '';
     document.getElementById('adminEmail').value = settings.adminEmail || '';
     document.getElementById('address').value = settings.address || '';
+    document.getElementById('businessHours').value = settings.businessHours || '';
     document.getElementById('googleAnalyticsId').value = settings.googleAnalyticsId || '';
     document.getElementById('logoUrl').value = settings.logoUrl || '';
     document.getElementById('backgroundImageUrl').value = settings.backgroundImageUrl || '';
+    
+    // SEO fields
+    document.getElementById('metaDescription').value = settings.metaDescription || '';
+    document.getElementById('metaKeywords').value = settings.metaKeywords || '';
+    document.getElementById('ogTitle').value = settings.ogTitle || '';
+    document.getElementById('ogDescription').value = settings.ogDescription || '';
+    document.getElementById('ogImage').value = settings.ogImage || '';
+    document.getElementById('twitterCard').value = settings.twitterCard || 'summary_large_image';
 
     // Set logo preview
     if (settings.logoUrl) {
@@ -1655,11 +1952,28 @@ function populateSiteSettingsForm(settings) {
     
     // Set privacy policy
     document.getElementById('privacyPolicy').value = settings.privacyPolicy || '';
+    
+    // Populate social links editor
+    if (settings.socialLinks && Array.isArray(settings.socialLinks)) {
+        populateSocialLinksEditor(settings.socialLinks);
+    }
 }
 
 async function handleSiteSettingsSubmit(e) {
     e.preventDefault();
     hideSiteSettingsMessages();
+ 
+    // Prepare social links from form
+    updateSocialLinksInput();
+    let socialLinks = [];
+    try {
+        const socialLinksJson = document.getElementById('socialLinks').value;
+        if (socialLinksJson) {
+            socialLinks = JSON.parse(socialLinksJson);
+        }
+    } catch (err) {
+        console.error('Error parsing social links:', err);
+    }
  
     const settingsData = {
         siteTitle: document.getElementById('siteTitle').value,
@@ -1668,6 +1982,7 @@ async function handleSiteSettingsSubmit(e) {
         emailAddress: document.getElementById('emailAddress').value,
         adminEmail: document.getElementById('adminEmail').value,
         address: document.getElementById('address').value,
+        businessHours: document.getElementById('businessHours').value,
         googleAnalyticsId: document.getElementById('googleAnalyticsId').value.trim(),
         logoUrl: document.getElementById('logoUrl').value,
         backgroundImageUrl: document.getElementById('backgroundImageUrl').value,
@@ -1679,7 +1994,15 @@ async function handleSiteSettingsSubmit(e) {
         containerTextColor: document.getElementById('containerTextColor').value,
         contractTerms: document.getElementById('contractTerms').value,
         salesContractTerms: document.getElementById('salesContractTerms').value,
-        privacyPolicy: document.getElementById('privacyPolicy').value
+        privacyPolicy: document.getElementById('privacyPolicy').value,
+        socialLinks: socialLinks,
+        // SEO fields
+        metaDescription: document.getElementById('metaDescription').value,
+        metaKeywords: document.getElementById('metaKeywords').value,
+        ogTitle: document.getElementById('ogTitle').value,
+        ogDescription: document.getElementById('ogDescription').value,
+        ogImage: document.getElementById('ogImage').value,
+        twitterCard: document.getElementById('twitterCard').value
     };
 
     try {
@@ -1713,6 +2036,9 @@ function applySiteSettings(settings) {
     if (settings.siteTitle) {
         document.title = settings.siteTitle;
     }
+    
+    // Update SEO meta tags
+    updateMetaTags(settings);
 
     // Apply logo
     if (settings.logoUrl) {
@@ -1730,6 +2056,9 @@ function applySiteSettings(settings) {
     // Apply logo text
     if (settings.logoText) {
         document.querySelectorAll('.logo-text').forEach(el => {
+            el.textContent = settings.logoText;
+        });
+        document.querySelectorAll('.home-identity-title').forEach(el => {
             el.textContent = settings.logoText;
         });
     }
@@ -1820,6 +2149,11 @@ function applySiteSettings(settings) {
 
     // Apply privacy policy
     updatePrivacyPolicy(settings);
+
+    // Render social links
+    if (settings.socialLinks && Array.isArray(settings.socialLinks)) {
+        renderSocialLinks(settings.socialLinks);
+    }
 
     updateFooterUserInfo();
 }
@@ -2044,6 +2378,254 @@ async function verifySession() {
     }
 }
 
+// Render social links in the sidebar footer
+function renderSocialLinks(socialLinks) {
+    const container = document.querySelector('.sidebar-footer-socials');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // Sort by displayOrder
+    const sorted = [...socialLinks].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    
+    sorted.forEach(link => {
+        if (link.url && link.url.trim()) {
+            const anchor = document.createElement('a');
+            anchor.className = 'sidebar-footer-social';
+            anchor.href = link.url;
+            anchor.target = '_blank';
+            anchor.rel = 'noopener';
+            anchor.setAttribute('aria-label', `Visit our ${link.name}`);
+            
+            const span = document.createElement('span');
+            span.textContent = link.icon || '•';
+            anchor.appendChild(span);
+            
+            container.appendChild(anchor);
+        }
+    });
+}
+
+// Populate social links editor in admin form
+function populateSocialLinksEditor(socialLinks) {
+    const container = document.getElementById('socialLinksContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // Sort by displayOrder
+    const sorted = [...socialLinks].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    
+    sorted.forEach((link, index) => {
+        const linkDiv = document.createElement('div');
+        linkDiv.className = 'social-link-item';
+        linkDiv.style.marginBottom = '15px';
+        linkDiv.style.padding = '15px';
+        linkDiv.style.backgroundColor = 'rgba(255,255,255,0.05)';
+        linkDiv.style.borderRadius = '5px';
+        linkDiv.innerHTML = `
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>Link Name</label>
+                <input type="text" class="social-link-name" value="${escapeHtml(link.name || '')}" placeholder="e.g., Facebook, Twitter, Instagram">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>URL</label>
+                <input type="url" class="social-link-url" value="${escapeHtml(link.url || '')}" placeholder="https://example.com">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>Icon/Symbol</label>
+                <input type="text" class="social-link-icon" value="${escapeHtml(link.icon || '')}" placeholder="f, ★, ▶, or emoji" maxlength="5">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>Display Order</label>
+                <input type="number" class="social-link-order" value="${link.displayOrder || index}" min="0" style="width: 100px;">
+            </div>
+            <button type="button" class="btn-danger remove-social-link" style="padding: 5px 10px; font-size: 12px;">Remove Link</button>
+        `;
+        
+        const removeBtn = linkDiv.querySelector('.remove-social-link');
+        removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            linkDiv.remove();
+            updateSocialLinksInput();
+        });
+        
+        // Add event listeners to inputs to update the hidden field when values change
+        const inputs = linkDiv.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('change', updateSocialLinksInput);
+            input.addEventListener('input', updateSocialLinksInput);
+        });
+        
+        container.appendChild(linkDiv);
+    });
+    
+    // Update hidden input with JSON
+    updateSocialLinksInput();
+}
+
+// Update the hidden socialLinks input field
+function updateSocialLinksInput() {
+    const items = document.querySelectorAll('.social-link-item');
+    const socialLinks = Array.from(items).map(item => ({
+        name: item.querySelector('.social-link-name').value,
+        url: item.querySelector('.social-link-url').value,
+        icon: item.querySelector('.social-link-icon').value,
+        displayOrder: parseInt(item.querySelector('.social-link-order').value, 10) || 0
+    }));
+    
+    document.getElementById('socialLinks').value = JSON.stringify(socialLinks);
+}
+
+// Add a new empty social link to the editor
+function addNewSocialLink(e) {
+    if (e) {
+        e.preventDefault();
+    }
+    
+    const container = document.getElementById('socialLinksContainer');
+    if (!container) return;
+    
+    // Get the current number of links to set displayOrder
+    const items = container.querySelectorAll('.social-link-item');
+    const newOrder = items.length;
+    
+    const linkDiv = document.createElement('div');
+    linkDiv.className = 'social-link-item';
+    linkDiv.style.marginBottom = '15px';
+    linkDiv.style.padding = '15px';
+    linkDiv.style.backgroundColor = 'rgba(255,255,255,0.05)';
+    linkDiv.style.borderRadius = '5px';
+    linkDiv.innerHTML = `
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label>Link Name</label>
+            <input type="text" class="social-link-name" value="" placeholder="e.g., Facebook, Twitter, Instagram">
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label>URL</label>
+            <input type="url" class="social-link-url" value="" placeholder="https://example.com">
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label>Icon/Symbol</label>
+            <input type="text" class="social-link-icon" value="" placeholder="f, ★, ▶, or emoji" maxlength="5">
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label>Display Order</label>
+            <input type="number" class="social-link-order" value="${newOrder}" min="0" style="width: 100px;">
+        </div>
+        <button type="button" class="btn-danger remove-social-link" style="padding: 5px 10px; font-size: 12px;">Remove Link</button>
+    `;
+    
+    const removeBtn = linkDiv.querySelector('.remove-social-link');
+    removeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        linkDiv.remove();
+        updateSocialLinksInput();
+    });
+    
+    // Add event listeners to inputs to update the hidden field when values change
+    const inputs = linkDiv.querySelectorAll('input');
+    inputs.forEach(input => {
+        input.addEventListener('change', updateSocialLinksInput);
+        input.addEventListener('input', updateSocialLinksInput);
+    });
+    
+    container.appendChild(linkDiv);
+    
+    // Update the hidden input with new data
+    updateSocialLinksInput();
+}
+
+// Handle password change
+async function handleChangePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+    
+    const errorEl = document.getElementById('passwordChangeError');
+    const successEl = document.getElementById('passwordChangeSuccess');
+    
+    // Hide previous messages
+    if (errorEl) errorEl.style.display = 'none';
+    if (successEl) successEl.style.display = 'none';
+    
+    // Validation
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+        if (errorEl) {
+            errorEl.textContent = 'All password fields are required';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        if (errorEl) {
+            errorEl.textContent = 'New password must be at least 6 characters long';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+        if (errorEl) {
+            errorEl.textContent = 'New passwords do not match';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (!authToken) {
+        if (errorEl) {
+            errorEl.textContent = 'You must be logged in to change password';
+            errorEl.style.display = 'block';
+        }
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            if (successEl) {
+                successEl.textContent = 'Password changed successfully!';
+                successEl.style.display = 'block';
+            }
+            // Clear password fields
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmNewPassword').value = '';
+            
+            // Hide success message after 5 seconds
+            setTimeout(() => {
+                if (successEl) successEl.style.display = 'none';
+            }, 5000);
+        } else {
+            if (errorEl) {
+                errorEl.textContent = data.message || 'Failed to change password';
+                errorEl.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        if (errorEl) {
+            errorEl.textContent = 'Error changing password. Please try again.';
+            errorEl.style.display = 'block';
+        }
+    }
+}
+
 // Update footer to show user info when logged in
 function updateFooterUserInfo() {
     const footerAdminLink = document.querySelector('.footer-admin-link');
@@ -2141,6 +2723,7 @@ async function loadDashboardStats() {
                 availableSale: document.getElementById('stat-available-sale'),
                 sold: document.getElementById('stat-sold'),
                 rent: document.getElementById('stat-rent'),
+                services: document.getElementById('stat-services'),
                 newRequests: document.getElementById('stat-new-requests')
             };
 
@@ -2176,11 +2759,13 @@ async function loadDashboardStats() {
             // Update stats with explicit value assignment
             const newRentRequests = stats.requests?.rent?.new ?? 0;
             const newSaleRequests = stats.requests?.sale?.new ?? 0;
+            const servicesCount = stats.services?.total ?? 0;
             const updates = [
                 { el: statElements.totalSale, value: stats.carsForSale?.total ?? 0 },
                 { el: statElements.availableSale, value: stats.carsForSale?.available ?? 0 },
                 { el: statElements.sold, value: stats.carsForSale?.sold ?? 0 },
                 { el: statElements.rent, value: stats.rentCars?.total ?? 0 },
+                { el: statElements.services, value: servicesCount },
                 { el: statElements.newRequests, value: newRentRequests + newSaleRequests }
             ];
 
@@ -2280,6 +2865,265 @@ function displayAdminCars(cars, containerId, type) {
         </div>
         `;
     }).join('');
+}
+
+// Admin Services Functions
+async function loadAdminServices() {
+    try {
+        const response = await fetch(`${API_BASE}/services/admin/all`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            const services = await response.json();
+            displayAdminServices(services);
+        }
+    } catch (error) {
+        console.error('Error loading admin services:', error);
+    }
+}
+
+function displayAdminServices(services) {
+    const container = document.getElementById('servicesList');
+    if (!container) return;
+
+    if (!services || services.length === 0) {
+        container.innerHTML = '<p style="color: #ccc;">No services found.</p>';
+        return;
+    }
+
+    container.innerHTML = services.map(service => {
+        return `
+        <div class="admin-service-item">
+            <div>
+                <h4>${service.title}</h4>
+                <p>${service.shortDescription.substring(0, 100)}${service.shortDescription.length > 100 ? '...' : ''}</p>
+                <p style="font-size: 0.85rem; color: #999;">Order: ${service.order} | ${service.isActive ? 'Active' : 'Inactive'}</p>
+            </div>
+            <div class="admin-service-actions">
+                <button class="btn-edit" onclick="editService('${service._id}')">Edit</button>
+                <button class="btn-delete" onclick="deleteService('${service._id}')">Delete</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+function openServiceForm(serviceId = null) {
+    const form = document.getElementById('serviceForm');
+    const modal = document.getElementById('serviceFormModal');
+    const title = modal?.querySelector('.modal-title');
+    const preview = document.getElementById('serviceImagePreview');
+    
+    if (!form || !modal || !title) return;
+
+    if (serviceId) {
+        // Edit mode
+        title.textContent = 'Edit Service';
+        form.dataset.serviceId = serviceId;
+        if (preview) preview.innerHTML = ''; // Clear image preview
+        loadServiceForEdit(serviceId);
+    } else {
+        // Add mode
+        title.textContent = 'Add New Service';
+        delete form.dataset.serviceId;
+        form.reset();
+        if (preview) preview.innerHTML = ''; // Clear image preview
+        const imageInput = document.getElementById('serviceImages');
+        if (imageInput) imageInput.value = ''; // Clear file input
+    }
+
+    modal.style.display = 'flex';
+}
+
+async function loadServiceForEdit(serviceId) {
+    try {
+        const response = await fetch(`${API_BASE}/services/${serviceId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            const service = await response.json();
+            document.getElementById('serviceTitle').value = service.title || '';
+            document.getElementById('serviceShortDesc').value = service.shortDescription || '';
+            document.getElementById('serviceFullDesc').value = service.fullDescription || '';
+            document.getElementById('serviceIcon').value = service.icon || '';
+            document.getElementById('serviceOrder').value = service.order || 0;
+            document.getElementById('serviceIsActive').checked = service.isActive !== false;
+            
+            // Load existing images
+            const preview = document.getElementById('serviceImagePreview');
+            if (preview && service.images && service.images.length > 0) {
+                preview.innerHTML = ''; // Clear preview
+                displayServiceImagePreviews(service.images, 'serviceImagePreview');
+            }
+        } else {
+            alert('Error loading service details');
+        }
+    } catch (error) {
+        console.error('Error loading service for edit:', error);
+        alert('Error loading service');
+    }
+}
+
+async function handleServiceFormSubmit(e) {
+    e.preventDefault();
+
+    const form = document.getElementById('serviceForm');
+    const serviceId = form.dataset.serviceId;
+    const method = serviceId ? 'PUT' : 'POST';
+    const url = serviceId ? `${API_BASE}/services/${serviceId}` : `${API_BASE}/services`;
+
+    // Collect images in order from preview
+    const preview = document.getElementById('serviceImagePreview');
+    const imageItems = preview?.querySelectorAll('.image-preview-item') || [];
+    const images = Array.from(imageItems).map(item => {
+        const img = item.querySelector('img');
+        return img?.src || '';
+    }).filter(Boolean);
+
+    const formData = {
+        title: document.getElementById('serviceTitle').value,
+        shortDescription: document.getElementById('serviceShortDesc').value,
+        fullDescription: document.getElementById('serviceFullDesc').value,
+        icon: document.getElementById('serviceIcon').value || 'fas fa-cog',
+        images: images,
+        mainImage: images.length > 0 ? images[0] : null,
+        order: parseInt(document.getElementById('serviceOrder').value) || 0,
+        isActive: document.getElementById('serviceIsActive').checked
+    };
+
+    try {
+        // Upload new images if any
+        const imageInput = document.getElementById('serviceImages');
+        if (imageInput?.files && imageInput.files.length > 0) {
+            try {
+                const newImageUrls = await uploadServiceImages(imageInput.files);
+                formData.images = [...(formData.images || []), ...newImageUrls];
+                formData.mainImage = formData.mainImage || (newImageUrls.length > 0 ? newImageUrls[0] : null);
+            } catch (uploadError) {
+                alert('Error uploading images: ' + uploadError.message);
+                return;
+            }
+        }
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (await handleApiResponse(response) === false) return;
+
+        if (response.ok) {
+            closeModal('serviceFormModal');
+            document.getElementById('serviceImages').value = ''; // Clear file input
+            loadAdminServices(); // Reload the services list
+            alert(serviceId ? 'Service updated successfully' : 'Service created successfully');
+        } else {
+            const data = await response.json();
+            alert(data.message || 'Error saving service');
+        }
+    } catch (error) {
+        console.error('Error saving service:', error);
+        alert('Error saving service');
+    }
+}
+
+async function editService(serviceId) {
+    openServiceForm(serviceId);
+}
+
+async function deleteService(serviceId) {
+    if (!confirm('Are you sure you want to delete this service?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/services/${serviceId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (await handleApiResponse(response) === false) return;
+
+        if (response.ok) {
+            loadAdminServices(); // Reload the services list
+            alert('Service deleted successfully');
+        } else {
+            const data = await response.json();
+            alert(data.message || 'Error deleting service');
+        }
+    } catch (error) {
+        console.error('Error deleting service:', error);
+        alert('Error deleting service');
+    }
+}
+
+// Service Image Handling
+let uploadedServiceImageUrls = [];
+
+function handleServiceImageUpload(event) {
+    const files = event.target.files;
+    const preview = document.getElementById('serviceImagePreview');
+    if (!preview) return;
+
+    const startIndex = preview.querySelectorAll('.image-preview-item').length;
+
+    Array.from(files).forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = (fileEvent) => {
+            createImagePreviewItem(preview, fileEvent.target.result, startIndex + index, false, 'serviceImagePreview');
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function displayServiceImagePreviews(imageUrls, previewId = 'serviceImagePreview') {
+    const preview = document.getElementById(previewId);
+    if (!preview) return;
+    
+    const existingItems = preview.querySelectorAll('[data-existing="true"]');
+    existingItems.forEach(item => item.remove());
+    
+    imageUrls.forEach((url, index) => {
+        createImagePreviewItem(preview, url, index, true, previewId);
+    });
+}
+
+async function uploadServiceImages(imageFiles) {
+    if (!imageFiles || imageFiles.length === 0) {
+        return [];
+    }
+    
+    const formData = new FormData();
+    Array.from(imageFiles).forEach(file => {
+        formData.append('images', file);
+    });
+    
+    try {
+        const response = await fetch(`${API_BASE}/upload/images`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.urls || [];
+        } else {
+            const error = await response.json();
+            throw new Error(error.message || 'Error uploading images');
+        }
+    } catch (error) {
+        console.error('Error uploading images:', error);
+        throw error;
+    }
 }
 
 async function loadClientRequests(targetType = 'all') {
@@ -2960,19 +3804,136 @@ function displayImagePreviews(imageUrls, previewId = 'imagePreview') {
     if (!preview) return;
     
     // Clear only existing images, keep newly selected ones
-    const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-    existingImgs.forEach(img => img.remove());
+    const existingItems = preview.querySelectorAll('[data-existing="true"]');
+    existingItems.forEach(item => item.remove());
     
-    imageUrls.forEach(url => {
-        const img = document.createElement('img');
-        img.src = url;
-        img.setAttribute('data-existing', 'true');
-        img.style.width = '100px';
-        img.style.height = '100px';
-        img.style.objectFit = 'cover';
-        img.style.borderRadius = '4px';
-        preview.appendChild(img);
+    imageUrls.forEach((url, index) => {
+        createImagePreviewItem(preview, url, index, true, previewId);
     });
+}
+
+function createImagePreviewItem(container, source, index, isExisting = false, containerId = 'imagePreview') {
+    const item = document.createElement('div');
+    item.className = 'image-preview-item';
+    item.setAttribute('data-index', index);
+    if (isExisting) {
+        item.setAttribute('data-existing', 'true');
+    } else {
+        item.setAttribute('data-new', 'true');
+    }
+    
+    const img = document.createElement('img');
+    img.src = source;
+    img.className = 'image-preview-img';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '8px';
+    
+    const controls = document.createElement('div');
+    controls.className = 'image-preview-controls';
+    
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'image-preview-btn image-preview-btn-up';
+    btnUp.setAttribute('aria-label', 'Move image up');
+    btnUp.addEventListener('click', (e) => {
+        e.preventDefault();
+        moveImageUp(item, containerId);
+    });
+    
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'image-preview-btn image-preview-btn-down';
+    btnDown.setAttribute('aria-label', 'Move image down');
+    btnDown.addEventListener('click', (e) => {
+        e.preventDefault();
+        moveImageDown(item, containerId);
+    });
+    
+    const btnMain = document.createElement('button');
+    btnMain.type = 'button';
+    btnMain.className = 'image-preview-btn image-preview-btn-main';
+    btnMain.setAttribute('aria-label', 'Mark as main image');
+    btnMain.addEventListener('click', (e) => {
+        e.preventDefault();
+        markMainImage(item, containerId);
+    });
+    
+    const btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'image-preview-btn image-preview-btn-delete';
+    btnDelete.setAttribute('aria-label', 'Delete image');
+    btnDelete.addEventListener('click', (e) => {
+        e.preventDefault();
+        deleteImage(item, containerId);
+    });
+    
+    controls.appendChild(btnUp);
+    controls.appendChild(btnDown);
+    controls.appendChild(btnMain);
+    controls.appendChild(btnDelete);
+    
+    item.appendChild(img);
+    item.appendChild(controls);
+    container.appendChild(item);
+}
+
+function moveImageUp(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    const currentIndex = items.indexOf(item);
+    
+    if (currentIndex > 0) {
+        const prevItem = items[currentIndex - 1];
+        container.insertBefore(item, prevItem);
+        updateImageIndices(container);
+    }
+}
+
+function moveImageDown(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    const currentIndex = items.indexOf(item);
+    
+    if (currentIndex < items.length - 1) {
+        const nextItem = items[currentIndex + 1];
+        container.insertBefore(nextItem, item);
+        updateImageIndices(container);
+    }
+}
+
+function markMainImage(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = container.querySelectorAll('.image-preview-item');
+    
+    items.forEach(i => i.classList.remove('main-image'));
+    item.classList.add('main-image');
+}
+
+function deleteImage(item, containerId) {
+    item.remove();
+    const container = document.getElementById(containerId);
+    updateImageIndices(container);
+}
+
+function updateImageIndices(container) {
+    const items = container.querySelectorAll('.image-preview-item');
+    items.forEach((item, index) => {
+        item.setAttribute('data-index', index);
+    });
+}
+
+function getOrderedImages(containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    
+    return items.map(item => ({
+        src: item.querySelector('.image-preview-img').src,
+        isMain: item.classList.contains('main-image'),
+        isNew: item.hasAttribute('data-new'),
+        isExisting: item.hasAttribute('data-existing')
+    }));
 }
 
 // Handle image file selection for sale cars
@@ -2980,19 +3941,12 @@ document.getElementById('carImages')?.addEventListener('change', function(e) {
     const files = Array.from(e.target.files);
     const preview = document.getElementById('imagePreview');
     if (preview) {
-        // Don't clear existing images, just add new ones
+        let startIndex = preview.querySelectorAll('.image-preview-item').length;
         
-        files.forEach(file => {
+        files.forEach((file, fileIndex) => {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.setAttribute('data-new', 'true');
-                img.style.width = '100px';
-                img.style.height = '100px';
-                img.style.objectFit = 'cover';
-                img.style.borderRadius = '4px';
-                preview.appendChild(img);
+            reader.onload = function(fileEvent) {
+                createImagePreviewItem(preview, fileEvent.target.result, startIndex + fileIndex, false, 'imagePreview');
             };
             reader.readAsDataURL(file);
         });
@@ -3004,19 +3958,12 @@ document.getElementById('carImagesRent')?.addEventListener('change', function(e)
     const files = Array.from(e.target.files);
     const preview = document.getElementById('imagePreviewRent');
     if (preview) {
-        // Don't clear existing images, just add new ones
+        let startIndex = preview.querySelectorAll('.image-preview-item').length;
         
-        files.forEach(file => {
+        files.forEach((file, fileIndex) => {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.setAttribute('data-new', 'true');
-                img.style.width = '100px';
-                img.style.height = '100px';
-                img.style.objectFit = 'cover';
-                img.style.borderRadius = '4px';
-                preview.appendChild(img);
+            reader.onload = function(fileEvent) {
+                createImagePreviewItem(preview, fileEvent.target.result, startIndex + fileIndex, false, 'imagePreviewRent');
             };
             reader.readAsDataURL(file);
         });
@@ -3108,7 +4055,7 @@ async function handleCarFormSubmit(e) {
         return;
     }
     
-    // Upload images first if any are selected
+    // Upload images first if any new files are selected
     let uploadedImageUrls = [];
     try {
         const imageInput = type === 'sale' ? document.getElementById('carImages') : document.getElementById('carImagesRent');
@@ -3120,6 +4067,10 @@ async function handleCarFormSubmit(e) {
         return;
     }
     
+    // Get ordered images from preview
+    const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
+    const orderedImages = getOrderedImages(previewId);
+    
     const carData = {
         brand: brand,
         model: model,
@@ -3128,43 +4079,31 @@ async function handleCarFormSubmit(e) {
         description: document.getElementById('carDescription').value || ''
     };
 
-    // Add uploaded images to car data
-    if (uploadedImageUrls.length > 0) {
-        // If editing, merge with existing images, otherwise use new images
-        if (carId) {
-            // Get existing images from preview (if any were displayed)
-            const existingImages = [];
-            const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
-            const preview = document.getElementById(previewId);
-            if (preview) {
-                const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-                existingImgs.forEach(img => {
-                    if (img.src && !img.src.startsWith('data:')) {
-                        existingImages.push(img.src);
-                    }
-                });
-            }
-            // Merge existing with new images
-            carData.images = [...existingImages, ...uploadedImageUrls];
-        } else {
-            carData.images = uploadedImageUrls;
-        }
-    } else if (carId) {
-        // If editing but no new images, preserve existing images
-        const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
-        const preview = document.getElementById(previewId);
-        if (preview) {
-            const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-            const existingImages = [];
-            existingImgs.forEach(img => {
-                if (img.src && !img.src.startsWith('data:')) {
-                    existingImages.push(img.src);
-                }
-            });
-            if (existingImages.length > 0) {
-                carData.images = existingImages;
+    // Build final image array with proper ordering and main image designation
+    const finalImages = [];
+    let mainImageUrl = null;
+    
+    orderedImages.forEach((imgInfo, index) => {
+        const url = imgInfo.src;
+        // Skip data: URLs (new images that need to be uploaded)
+        if (!url.startsWith('data:')) {
+            finalImages.push(url);
+            // Set main image if marked
+            if (imgInfo.isMain) {
+                mainImageUrl = url;
             }
         }
+    });
+    
+    // Add newly uploaded images in order
+    uploadedImageUrls.forEach(url => {
+        finalImages.push(url);
+    });
+    
+    if (finalImages.length > 0) {
+        carData.images = finalImages;
+        // Set the main image to the first image if no specific main image was marked
+        carData.image = mainImageUrl || finalImages[0];
     }
 
     if (type === 'sale') {
@@ -3477,6 +4416,7 @@ function updateContactPageWithSettings(settings = {}) {
     const phone = settings.phoneNumber || '';
     const email = settings.emailAddress || '';
     const address = settings.address || '';
+    const businessHours = settings.businessHours || '';
 
     const contactPhoneEl = document.getElementById('contactPhone');
     if (contactPhoneEl) {
@@ -3501,6 +4441,11 @@ function updateContactPageWithSettings(settings = {}) {
     const bringMeHereBtn = document.getElementById('bringMeHereBtn');
     if (bringMeHereBtn && address) {
         bringMeHereBtn.setAttribute('data-address', address);
+    }
+
+    const businessHoursDisplay = document.getElementById('businessHoursDisplay');
+    if (businessHoursDisplay && businessHours) {
+        businessHoursDisplay.innerHTML = businessHours.replace(/\n/g, '<br>');
     }
 }
 
@@ -4728,4 +5673,5 @@ window.updateRequestPrice = updateRequestPrice;
 window.clearCustomPrice = clearCustomPrice;
 window.updateFuelLevel = updateFuelLevel;
 
+//# sourceMappingURL=app.js.map
 //# sourceMappingURL=app.js.map

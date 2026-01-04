@@ -120,8 +120,47 @@ sarasotaautomotive/
 │   └── uploads/      # Uploaded images directory
 ├── server.js         # Main server file
 ├── init-admin.js     # Admin user initialization script
-└── package.json      # Dependencies
+├── package.json      # Dependencies
+└── Dockerfile        # Docker container configuration
 ```
+
+## Code Architecture
+
+### Frontend Structure
+The frontend uses **vanilla JavaScript** (no framework) with a monolithic main file approach:
+
+- **app.js** (4,730 lines) - Main application file containing:
+  - Navigation and page routing
+  - Car inventory display and management
+  - Admin dashboard functionality
+  - Form handling and validation
+  - Cookie consent and analytics
+  - Password management
+  - Site settings management
+
+- **app.legacy.js** (5,654 lines) - Legacy version with additional compatibility code
+
+- **lightbox.js** - Modular image viewer for car photo galleries
+
+- **styles.css** (5,357 lines) - All CSS styling with:
+  - CSS Variables for theming
+  - Glassmorphism UI design
+  - Responsive layout
+  - Viewport-based responsive design
+
+**Why Monolithic JavaScript:**
+- No build process required
+- Direct browser execution
+- Simple deployment
+- Easy debugging
+- Single source of truth for client-side logic
+
+### Backend Structure
+- **Node.js + Express** - RESTful API server
+- **MongoDB + Mongoose** - Document-based database with schema validation
+- **JWT** - Stateless authentication
+- **Multer** - File upload handling for car images
+- **Nodemailer** - Email notifications
 
 ## API Endpoints
 
@@ -267,12 +306,37 @@ To enable email notifications, configure SMTP settings in `.env`:
 - Error messages displayed in form modal
 - Image preview before upload
 
+### Code Optimization Notes
+- **app.js** is a monolithic file (4,730 lines) - this is intentional for simplicity and direct execution
+- No build process or transpilation required
+- All functionality in a single file for easy debugging and maintenance
+- Future refactoring could split into ES6 modules if needed
+
+## Future Improvements
+
+### Potential Refactoring
+If code complexity grows, consider modularizing with ES6 modules:
+```javascript
+// Example module structure (not currently implemented)
+- js/modules/auth.js       // Authentication logic
+- js/modules/cars.js       // Car management
+- js/modules/navigation.js // Page routing
+- js/modules/utils.js      // Helper functions
+- js/modules/constants.js  // Shared constants
+```
+
+Currently, the application prioritizes:
+- ✅ Simplicity (no build tools)
+- ✅ Direct browser execution
+- ✅ Easy debugging
+- ✅ Single file for all client logic
+- ⚠️ Large file size (traded for above benefits)
+
 ## Troubleshooting
 
 ### MongoDB Connection Issues
 - Ensure MongoDB is running: `sudo systemctl status mongod`
 - Check connection string in `.env` file
-- See `QUICK_START.md` for MongoDB installation instructions
 
 ### Image Upload Issues
 - Check that `public/uploads/` directory exists and has write permissions
@@ -281,15 +345,4 @@ To enable email notifications, configure SMTP settings in `.env`:
 
 ### Admin Login Issues
 - Ensure admin user is initialized: `npm run init-admin`
-- Check JWT_SECRET is set in `.env`
-- Verify token expiration settings
-
-### Page Not Persisting on Refresh
-- Clear browser cache and hard refresh (Ctrl+Shift+R)
-- Check browser console for JavaScript errors
-- Verify URL hash is being set correctly
-
-## License
-
-ISC
-
+- Check JWT_SECRET is set in `.env` file
