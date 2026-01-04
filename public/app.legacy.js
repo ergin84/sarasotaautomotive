@@ -25,18 +25,32 @@ let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let currentPage = 'home';
 
 // Initialize
-document.addEventListener('DOMContentLoaded', async () => {
-    // Verify session on load (this updates authToken and currentUser)
-    await verifySession();
-    // Update footer after session verification
-    updateFooterUserInfo();
-    // Always load DB-backed site settings on startup
-    initializeSiteSettings();
-    initializeNavigation();
-    initializeCookieConsent();
-    initializeModals();
-    initializeAdmin();
-    loadInitialPage();
+window.addEventListener('load', function() {
+    console.log('Window load event fired');
+    // Just load the initial page first
+    try {
+        console.log('Calling loadInitialPage immediately');
+        loadInitialPage();
+        console.log('loadInitialPage succeeded');
+    } catch (e) {
+        console.error('loadInitialPage failed:', e);
+    }
+    
+    // Then do all the other initialization asynchronously
+    setTimeout(function() {
+        try {
+            console.log('Starting async initialization');
+            updateFooterUserInfo();
+            initializeSiteSettings();
+            initializeNavigation();
+            initializeCookieConsent();
+            initializeModals();
+            initializeAdmin();
+            console.log('Async initialization complete');
+        } catch (error) {
+            console.error('Error in async initialization:', error);
+        }
+    }, 100);
 });
 
 function formatCarStatus(status) {
@@ -199,16 +213,29 @@ function initializeNavigation() {
         });
     }
 
-    // Hamburger/X menu toggle - click still works
+    // Track if a touch event just occurred to prevent hover simulation on mobile
+    let lastTouchTime = 0;
+    
+    // Hamburger/X menu toggle - click works on both desktop and mobile
     menuToggle?.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleSidebar();
     });
 
-    // Open menu on hover (mouseenter)
+    // Detect touch events to prevent hover simulation
+    menuToggle?.addEventListener('touchstart', () => {
+        lastTouchTime = Date.now();
+    }, { passive: true });
+
+    // Open menu on hover (mouseenter) - but only on desktop
     let menuHoverTimeout = null;
     
     menuToggle?.addEventListener('mouseenter', () => {
+        // Ignore mouseenter if it's from a touch event (within 500ms of touch)
+        if (Date.now() - lastTouchTime < 500) {
+            return;
+        }
+        
         // Clear any pending close timeout
         if (menuHoverTimeout) {
             clearTimeout(menuHoverTimeout);
@@ -221,8 +248,12 @@ function initializeNavigation() {
     });
 
     // Close menu when mouse leaves menu area (both sidebar and toggle button)
-    // Create a wrapper element to detect mouse leaving the entire menu area
     function handleMenuMouseLeave() {
+        // Don't auto-close on touch devices
+        if (Date.now() - lastTouchTime < 500) {
+            return;
+        }
+        
         menuHoverTimeout = setTimeout(() => {
             if (document.body.classList.contains('menu-open')) {
                 closeSidebar();
@@ -379,13 +410,6 @@ function showPage(pageId) {
         document.body.classList.remove('home-page-active');
     }
 
-    // Check authentication for protected pages
-    const protectedPages = ['admin-dashboard', 'admin-change-password'];
-    if (protectedPages.includes(pageId) && !authToken) {
-        showPage('admin-login');
-        return;
-    }
-
     // Show selected page
     const targetPage = document.getElementById(pageId);
     if (targetPage) {
@@ -414,6 +438,8 @@ function showPage(pageId) {
             loadAdminDashboard();
         } else if (pageId === 'privacy') {
             loadPrivacyPolicy();
+        } else if (pageId === 'services') {
+            loadPublicServices();
         }
     }
 }
@@ -427,29 +453,16 @@ function updateActiveNav(activeLink) {
 
 function loadInitialPage() {
     const hash = window.location.hash.slice(1);
-    
-    // Check for reset password token in URL (e.g., ?token=abc123)
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('token')) {
-        showPage('admin-reset-password');
-        return;
-    }
-    
     if (hash && document.getElementById(hash)) {
         // Check if user is authenticated for admin pages
-        const protectedPages = ['admin-dashboard', 'admin-change-password'];
-        if (protectedPages.includes(hash)) {
-            if (!authToken) {
+        if (hash === 'admin-dashboard' || hash === 'admin-login') {
+            if (hash === 'admin-dashboard' && !authToken) {
                 showPage('admin-login');
                 updateActiveNavForPage('admin-login');
             } else {
                 showPage(hash);
                 updateActiveNavForPage(hash);
             }
-        } else if (hash === 'admin-login' || hash === 'admin-forgot-password') {
-            // These pages are public but admin-related
-            showPage(hash);
-            updateActiveNavForPage(hash);
         } else {
             showPage(hash);
             updateActiveNavForPage(hash);
@@ -501,6 +514,48 @@ function initializeModals() {
             }
         });
     });
+
+    // Initialize lightbox controls
+    const lightbox = document.getElementById('imageLightbox');
+    const lightboxCloseBtn = document.getElementById('lightboxCloseBtn');
+    const lightboxPrevBtn = document.getElementById('lightboxPrevBtn');
+    const lightboxNextBtn = document.getElementById('lightboxNextBtn');
+
+    if (lightboxCloseBtn) {
+        lightboxCloseBtn.addEventListener('click', closeLightbox);
+    }
+
+    if (lightboxPrevBtn) {
+        lightboxPrevBtn.addEventListener('click', prevLightboxImage);
+    }
+
+    if (lightboxNextBtn) {
+        lightboxNextBtn.addEventListener('click', nextLightboxImage);
+    }
+
+    // Close lightbox when clicking outside the image
+    if (lightbox) {
+        lightbox.addEventListener('click', (e) => {
+            if (e.target === lightbox) {
+                closeLightbox();
+            }
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!lightbox.classList.contains('active')) return;
+            
+            if (e.key === 'Escape') {
+                closeLightbox();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevLightboxImage();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                nextLightboxImage();
+            }
+        });
+    }
 }
 
 function closeModal(modalId) {
@@ -637,6 +692,170 @@ async function loadCarsForRent() {
     }
 }
 
+// Load Services for public display
+async function loadPublicServices() {
+    try {
+        const response = await fetch(`${API_BASE}/services`);
+        if (!response.ok) {
+            throw new Error('Failed to load services');
+        }
+        const services = await response.json();
+        displayPublicServices(services);
+    } catch (error) {
+        console.error('Error loading services:', error);
+        const servicesGrid = document.getElementById('servicesGrid');
+        if (servicesGrid) {
+            servicesGrid.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; width: 100%; padding: 2rem;">Unable to load services. Please try again later.</p>';
+        }
+    }
+}
+
+// Display Services
+function displayPublicServices(services) {
+    const servicesGrid = document.getElementById('servicesGrid');
+    if (!servicesGrid) return;
+
+    if (services.length === 0) {
+        servicesGrid.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; width: 100%; padding: 2rem;">No services available at the moment.</p>';
+        return;
+    }
+
+    servicesGrid.innerHTML = services.map(service => {
+        const mainImageUrl = service.mainImage || (service.images && service.images.length > 0 ? service.images[0] : null);
+        const hasImage = !!mainImageUrl;
+        
+        return `
+        <div class="service-card" onclick="showServiceDetail('${service._id}')">
+            <div class="service-image">
+                ${hasImage ? `
+                    <img src="${escapeHtml(mainImageUrl)}" alt="${escapeHtml(service.title)}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;">
+                ` : `
+                    <i class="${escapeHtml(service.icon || 'fas fa-cog')}" style="font-size: 48px; color: var(--accent-color);"></i>
+                `}
+            </div>
+            <div class="service-content">
+                <h3 class="service-title">${escapeHtml(service.title)}</h3>
+                <p class="service-subtitle">${escapeHtml(service.shortDescription)}</p>
+            </div>
+        </div>
+    `}).join('');
+}
+
+// Show Service Detail
+async function showServiceDetail(serviceId) {
+    try {
+        const response = await fetch(`${API_BASE}/services/${serviceId}`);
+        if (!response.ok) {
+            throw new Error('Service not found');
+        }
+
+        const service = await response.json();
+        
+        // Show the service detail page
+        showPage('service-detail');
+        
+        // Load images
+        const images = service.images && service.images.length > 0 ? service.images : [];
+        const mainImage = service.mainImage || (images.length > 0 ? images[0] : null);
+        
+        // Update main image
+        const mainImageEl = document.getElementById('serviceDetailMainImage');
+        if (mainImageEl && mainImage) {
+            mainImageEl.src = mainImage;
+            mainImageEl.loading = 'eager'; // Load immediately for detail page
+        }
+        
+        // Load title
+        const titleEl = document.getElementById('serviceDetailTitle');
+        if (titleEl) {
+            titleEl.textContent = service.title || 'Service';
+        }
+        
+        // Load description
+        const descEl = document.getElementById('serviceDetailDescription');
+        if (descEl) {
+            descEl.innerHTML = `<p>${(service.fullDescription || '').replace(/\n/g, '<br>')}</p>`;
+        }
+        
+        // Load thumbnails if there are multiple images
+        if (images.length > 1) {
+            const thumbsContainer = document.getElementById('serviceDetailThumbnails');
+            if (thumbsContainer) {
+                thumbsContainer.innerHTML = images.map((img, index) => `
+                    <button type="button" class="service-detail-thumb ${index === 0 ? 'active' : ''}" 
+                            data-image="${escapeHtml(img)}" 
+                            onclick="switchServiceImage('${escapeHtml(img)}')"
+                            aria-label="View image ${index + 1}">
+                        <img src="${escapeHtml(img)}" alt="Service thumbnail ${index + 1}" onerror="this.src='/images/no-image.svg'">
+                    </button>
+                `).join('');
+            }
+        }
+        
+        // Add click handler to main image for lightbox
+        if (mainImageEl && images.length > 0) {
+            mainImageEl.style.cursor = 'pointer';
+            mainImageEl.onclick = () => openImageLightbox(images, images.indexOf(mainImage));
+        }
+        
+    } catch (error) {
+        console.error('Error loading service detail:', error);
+        alert('Error loading service details');
+    }
+}
+
+// Switch service image
+function switchServiceImage(imageUrl) {
+    const mainImageEl = document.getElementById('serviceDetailMainImage');
+    if (mainImageEl) {
+        mainImageEl.src = imageUrl;
+    }
+    
+    // Update active thumbnail
+    document.querySelectorAll('.service-detail-thumb').forEach(thumb => {
+        if (thumb.getAttribute('data-image') === imageUrl) {
+            thumb.classList.add('active');
+        } else {
+            thumb.classList.remove('active');
+        }
+    });
+}
+
+// Create Service Modal
+function createServiceModal() {
+    const modalHTML = `
+        <div id="serviceModal" class="modal">
+            <div class="modal-content" style="max-width: 800px;">
+                <span class="close-modal" onclick="closeServiceDetailModal()">&times;</span>
+                <h2 id="serviceDetailTitle"></h2>
+                <div id="serviceDetailContent"></div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Close Service Modal
+function closeServiceDetailModal() {
+    const modal = document.getElementById('serviceModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Navigate to contact page
+function navigateToContact(event) {
+    event.preventDefault();
+    showPage('contact');
+}
+
+// Make functions globally accessible
+window.showServiceDetail = showServiceDetail;
+window.switchServiceImage = switchServiceImage;
+window.closeServiceDetailModal = closeServiceDetailModal;
+window.navigateToContact = navigateToContact;
+
 // Display Cars
 function displayCars(cars, containerId, type) {
     const container = document.getElementById(containerId);
@@ -745,7 +964,7 @@ async function showCarDetails(carId, type) {
             ? `<div class="car-detail-thumbnails">
                     ${images.map((imgUrl, index) => `
                         <button type="button" class="car-detail-thumb ${index === 0 ? 'active' : ''}" data-image="${escapeHtml(imgUrl)}" data-index="${index}" aria-label="View image ${index + 1}">
-                            <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(`${carTitle} thumbnail ${index + 1}`)}" onerror="this.src='/images/no-image.svg'">
+                            <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(`${carTitle} thumbnail ${index + 1}`)}" loading="lazy" onerror="this.src='/images/no-image.svg'">
                         </button>
                     `).join('')}
                </div>`
@@ -838,16 +1057,39 @@ async function showCarDetails(carId, type) {
 
         const mainImage = detailsContainer.querySelector('#carDetailMainImage');
         const thumbnails = detailsContainer.querySelectorAll('.car-detail-thumb');
+        
+        // Track the current displayed image index
+        let currentImageIndex = 0;
+        
+        // Update main image and sync thumbnails
+        const updateMainImage = (newImage) => {
+            if (mainImage && newImage) {
+                mainImage.src = newImage;
+                currentImageIndex = images.indexOf(newImage);
+            }
+            thumbnails.forEach(btn => {
+                if (btn.getAttribute('data-image') === newImage) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        };
+        
         thumbnails.forEach(thumb => {
             thumb.addEventListener('click', () => {
                 const newImage = thumb.getAttribute('data-image');
-                if (mainImage && newImage) {
-                    mainImage.src = newImage;
-                }
-                thumbnails.forEach(btn => btn.classList.remove('active'));
-                thumb.classList.add('active');
+                const index = parseInt(thumb.getAttribute('data-index'), 10);
+                openImageLightbox(images, index);
             });
         });
+
+        // Add lightbox functionality to main image
+        if (mainImage) {
+            mainImage.addEventListener('click', () => {
+                openImageLightbox(images, currentImageIndex);
+            });
+        }
 
         const requestButton = detailsContainer.querySelector('#openRequestFormBtn');
         const requestPanel = detailsContainer.querySelector('#carRequestPanel');
@@ -1097,6 +1339,7 @@ document.getElementById('changePasswordForm')?.addEventListener('submit', async 
             errorDiv.classList.add('show');
         }
     } catch (error) {
+        console.error('Error:', error);
         errorDiv.textContent = 'Error connecting to server';
         errorDiv.classList.add('show');
     }
@@ -1342,6 +1585,8 @@ function initializeAdmin() {
             const button = e.target.closest('.admin-nav-btn, .admin-nav-btn-icon');
             if (!button) return;
 
+            console.log('Admin button clicked:', button.getAttribute('data-section'));
+
             if (button.id === 'logoutBtn') {
                 logout();
                 return;
@@ -1349,11 +1594,14 @@ function initializeAdmin() {
 
             const section = button.getAttribute('data-section');
             if (section) {
+                console.log('Section to load:', section);
                 document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
                 document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.admin-nav-btn-icon').forEach(b => b.classList.remove('active'));
                 
                 const targetSection = document.getElementById(section);
+                console.log('Target section element found:', !!targetSection);
+                
                 if (targetSection) {
                     // Show the target section first
                     targetSection.classList.add('active');
@@ -1378,10 +1626,15 @@ function initializeAdmin() {
                         setTimeout(() => {
                             requestAnimationFrame(() => {
                                 loadDashboardStats();
+                                loadDashboardServices();
                             });
                         }, 0);
                     } else if (section === 'site-settings') {
+                        bindSiteSettingsForm();
                         loadSiteSettings();
+                    } else if (section === 'manage-services') {
+                        console.log('About to call loadAdminServices');
+                        loadAdminServices();
                     }
                 }
             }
@@ -1397,12 +1650,45 @@ function initializeAdmin() {
         openCarForm('rent');
     });
 
+    // Add service button
+    document.getElementById('addServiceBtn')?.addEventListener('click', () => {
+        openServiceForm();
+    });
+
+    // Dashboard add service button
+    document.getElementById('dashboardAddServiceBtn')?.addEventListener('click', () => {
+        openServiceForm();
+    });
+
     // Car form submit
     document.getElementById('carForm')?.addEventListener('submit', handleCarFormSubmit);
 
 }
 
 // Site Settings Functions
+let isSavingSiteSettings = false;
+// Fallback delegation: if the form somehow wasn't bound, catch submit and process
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (form && form.id === 'siteSettingsForm' && !form.dataset.boundSiteSettings) {
+        console.warn('Delegated handler caught site settings submit; binding now.');
+        event.preventDefault();
+        bindSiteSettingsForm();
+        handleSiteSettingsSubmit(event);
+    }
+});
+
+function bindSiteSettingsForm() {
+    const form = document.getElementById('siteSettingsForm');
+    if (form && !form.dataset.boundSiteSettings) {
+        form.addEventListener('submit', handleSiteSettingsSubmit);
+        form.dataset.boundSiteSettings = 'true';
+        console.log('Site settings form listeners attached');
+        return true;
+    }
+    return !!(form && form.dataset.boundSiteSettings);
+}
+
 function initializeSiteSettings() {
     // Load settings on page load
     loadSiteSettingsForDisplay();
@@ -1484,8 +1770,18 @@ function initializeSiteSettings() {
     setupColorPickerSync('containerBackgroundColor', 'containerBackgroundColorText', 0.6);
     setupColorPickerSync('containerBorderColor', 'containerBorderColorText', 0.2);
 
-    // Form submission
-    document.getElementById('siteSettingsForm')?.addEventListener('submit', handleSiteSettingsSubmit);
+    // Form submission (bind + fallback logging)
+    if (!bindSiteSettingsForm()) {
+        console.warn('Site settings form not found during initialization');
+    }
+
+    // Explicit click handler so we see activity even if native submit is suppressed by the browser
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', () => {
+            console.log('Save settings button clicked');
+        });
+    }
 
     // Reset button
     document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSiteSettings);
@@ -1603,6 +1899,7 @@ function populateSiteSettingsForm(settings) {
     document.getElementById('emailAddress').value = settings.emailAddress || '';
     document.getElementById('adminEmail').value = settings.adminEmail || '';
     document.getElementById('address').value = settings.address || '';
+    document.getElementById('businessHoursInput').value = settings.businessHours || 'Monday - Saturday: 9:00 AM - 6:00 PM\nSunday: Closed';
     document.getElementById('googleAnalyticsId').value = settings.googleAnalyticsId || '';
     document.getElementById('logoUrl').value = settings.logoUrl || '';
     document.getElementById('backgroundImageUrl').value = settings.backgroundImageUrl || '';
@@ -1660,6 +1957,26 @@ function populateSiteSettingsForm(settings) {
 async function handleSiteSettingsSubmit(e) {
     e.preventDefault();
     hideSiteSettingsMessages();
+
+    if (!authToken) {
+        showSiteSettingsError('Please log in again to update site settings.');
+        return;
+    }
+
+    if (isSavingSiteSettings) {
+        console.warn('Site settings save already in progress');
+        return;
+    }
+
+    isSavingSiteSettings = true;
+    const submitButton = document.getElementById('saveSettingsBtn');
+    const originalButtonText = submitButton?.textContent || 'Save Settings';
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Saving...';
+    }
+
+    console.log('Submitting site settings...');
  
     const settingsData = {
         siteTitle: document.getElementById('siteTitle').value,
@@ -1668,6 +1985,7 @@ async function handleSiteSettingsSubmit(e) {
         emailAddress: document.getElementById('emailAddress').value,
         adminEmail: document.getElementById('adminEmail').value,
         address: document.getElementById('address').value,
+        businessHours: document.getElementById('businessHoursInput').value,
         googleAnalyticsId: document.getElementById('googleAnalyticsId').value.trim(),
         logoUrl: document.getElementById('logoUrl').value,
         backgroundImageUrl: document.getElementById('backgroundImageUrl').value,
@@ -1692,19 +2010,44 @@ async function handleSiteSettingsSubmit(e) {
             body: JSON.stringify(settingsData)
         });
 
+        console.log('Site settings save response status:', response.status);
+        let parsedBody = null;
+        try {
+            parsedBody = await response.clone().json();
+        } catch (parseErr) {
+            console.warn('Site settings response not JSON:', parseErr);
+        }
+        if (parsedBody) {
+            console.log('Site settings response body:', parsedBody);
+        }
+
         if (response.ok) {
-            const updatedSettings = await response.json();
+            const updatedSettings = parsedBody || await response.json();
+            // Update UI immediately with saved values
+            populateSiteSettingsForm(updatedSettings);
             applySiteSettings(updatedSettings);
             showSiteSettingsSuccess('Settings saved successfully!');
-            // Reload settings to reflect any server-side changes
+            // Reload public-facing settings to reflect any server-side defaults/normalization
             setTimeout(() => loadSiteSettingsForDisplay(), 500);
         } else {
-            const data = await response.json();
-            showSiteSettingsError(data.message || 'Error saving settings');
+            let message = 'Error saving settings';
+            if (parsedBody && parsedBody.message) {
+                message = parsedBody.message;
+            }
+            if (response.status === 401) {
+                message = 'Session expired. Please log in again to update site settings.';
+            }
+            showSiteSettingsError(message);
         }
     } catch (error) {
         console.error('Error saving site settings:', error);
         showSiteSettingsError('Error saving settings');
+    } finally {
+        isSavingSiteSettings = false;
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
+        }
     }
 }
 
@@ -1769,6 +2112,14 @@ function applySiteSettings(settings) {
 
     // Update contact page with all settings
     updateContactPageWithSettings(settings);
+
+    // Apply business hours to contact card
+    if (settings.businessHours) {
+        const businessHoursEl = document.getElementById('businessHours');
+        if (businessHoursEl) {
+            businessHoursEl.innerHTML = formatMultilineText(settings.businessHours);
+        }
+    }
 
     // Update analytics configuration
     const incomingAnalyticsId = (settings.googleAnalyticsId || '').trim();
@@ -1933,31 +2284,47 @@ async function resetSiteSettings() {
         'warning'
     );
     if (confirmed) {
-        document.getElementById('siteSettingsForm').reset();
-        document.getElementById('logoUrl').value = '';
-        document.getElementById('backgroundImageUrl').value = '';
-        document.getElementById('logoPreviewImg').src = '';
-        document.getElementById('bgPreviewImg').style.display = 'none';
-        // Reset to default values
-        document.getElementById('siteTitle').value = 'Sarasota Automotive';
-        document.getElementById('logoText').value = 'Sarasota Automotive';
-        document.getElementById('phoneNumber').value = '(941) 555-0123';
-        document.getElementById('emailAddress').value = 'info@sarasotaautomotive.com';
-        document.getElementById('adminEmail').value = 'info@sarasotaautomotive.com';
-        document.getElementById('address').value = '5671 McIntosh Rd Sarasota, FL 34233';
-        document.getElementById('googleAnalyticsId').value = '';
-        
-        // Reset colors to new teal glass defaults
-        document.getElementById('menuBackgroundColor').value = '#082430';
-        document.getElementById('menuBackgroundColorText').value = 'rgba(8, 36, 48, 0.70)';
-        document.getElementById('menuTextColor').value = '#f4f7f9';
-        document.getElementById('menuAccentColor').value = '#85c4e4';
-        
-        document.getElementById('containerBackgroundColor').value = '#0e2e3c';
-        document.getElementById('containerBackgroundColorText').value = 'rgba(14, 46, 60, 0.60)';
-        document.getElementById('containerBorderColor').value = '#c2e4f2';
-        document.getElementById('containerBorderColorText').value = 'rgba(194, 228, 242, 0.35)';
-        document.getElementById('containerTextColor').value = '#e6eef2';
+        hideSiteSettingsMessages();
+        if (!authToken) {
+            showSiteSettingsError('Please log in again to reset site settings.');
+            return;
+        }
+
+        const resetButton = document.getElementById('resetSettingsBtn');
+        const originalText = resetButton?.textContent || 'Reset to Defaults';
+        if (resetButton) {
+            resetButton.disabled = true;
+            resetButton.textContent = 'Resetting...';
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/site-settings/reset`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                populateSiteSettingsForm(data);
+                applySiteSettings(data);
+                showSiteSettingsSuccess('Settings reset to defaults');
+                // Ensure public-facing view reflects defaults
+                setTimeout(() => loadSiteSettingsForDisplay(), 300);
+            } else {
+                showSiteSettingsError(data.message || 'Error resetting settings');
+            }
+        } catch (error) {
+            console.error('Error resetting site settings:', error);
+            showSiteSettingsError('Error resetting settings');
+        } finally {
+            if (resetButton) {
+                resetButton.disabled = false;
+                resetButton.textContent = originalText;
+            }
+        }
     }
 }
 
@@ -2097,6 +2464,12 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function formatMultilineText(text = '') {
+    // Escape then replace newlines with <br> for safe display
+    const escaped = escapeHtml(text);
+    return escaped.replace(/\r?\n/g, '<br>');
+}
+
 function buildTelHref(phoneNumber) {
     if (!phoneNumber) return '';
 
@@ -2138,8 +2511,8 @@ async function loadDashboardStats() {
         const tryLoad = async (attempt = 0) => {
             const statElements = {
                 totalSale: document.getElementById('stat-total-sale'),
-                availableSale: document.getElementById('stat-available-sale'),
-                sold: document.getElementById('stat-sold'),
+                availableSale: document.getElementById('stat-available-sale-detail'),
+                sold: document.getElementById('stat-sold-detail'),
                 rent: document.getElementById('stat-rent'),
                 newRequests: document.getElementById('stat-new-requests')
             };
@@ -2210,6 +2583,61 @@ async function loadDashboardStats() {
             const el = document.getElementById(id);
             if (el) el.textContent = '0';
         });
+    }
+}
+
+// Load services for dashboard
+async function loadDashboardServices() {
+    try {
+        const servicesGrid = document.getElementById('dashboardServicesList');
+        if (!servicesGrid) return;
+
+        // Load all services (with auth if available)
+        const headers = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+        const endpoint = authToken ? `${API_BASE}/services/admin/all` : `${API_BASE}/services`;
+        
+        const response = await fetch(endpoint, { headers });
+        
+        if (!response.ok) {
+            servicesGrid.innerHTML = '<p style="color: var(--text-gray);">Unable to load services</p>';
+            return;
+        }
+
+        const services = await response.json();
+        
+        // Update total services stat
+        const statsEl = document.getElementById('stat-total-services');
+        if (statsEl) {
+            statsEl.textContent = services.length;
+        }
+
+        // Display services
+        if (services.length === 0) {
+            servicesGrid.innerHTML = '<p style="color: var(--text-gray); text-align: center; grid-column: 1/-1; padding: 30px;">No services yet. <a href="#" onclick="openServiceForm(); return false;" style="color: var(--accent-color);">Create one</a></p>';
+            return;
+        }
+
+        servicesGrid.innerHTML = services.map(service => `
+            <div class="dashboard-service-card">
+                <h4>${escapeHtml(service.title)}</h4>
+                <p>${escapeHtml(service.shortDescription || '')}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <span style="font-size: 12px; color: ${service.isActive ? '#51cf66' : '#ff6b6b'};">
+                        ${service.isActive ? '✓ Active' : '○ Inactive'}
+                    </span>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn-icon" onclick="editService('${service._id}')" title="Edit" style="padding: 4px 8px; font-size: 12px;">Edit</button>
+                        <button class="btn-icon btn-danger" onclick="deleteService('${service._id}')" title="Delete" style="padding: 4px 8px; font-size: 12px;">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading dashboard services:', error);
+        const servicesGrid = document.getElementById('dashboardServicesList');
+        if (servicesGrid) {
+            servicesGrid.innerHTML = '<p style="color: var(--text-gray);">Error loading services</p>';
+        }
     }
 }
 
@@ -2960,19 +3388,136 @@ function displayImagePreviews(imageUrls, previewId = 'imagePreview') {
     if (!preview) return;
     
     // Clear only existing images, keep newly selected ones
-    const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-    existingImgs.forEach(img => img.remove());
+    const existingItems = preview.querySelectorAll('[data-existing="true"]');
+    existingItems.forEach(item => item.remove());
     
-    imageUrls.forEach(url => {
-        const img = document.createElement('img');
-        img.src = url;
-        img.setAttribute('data-existing', 'true');
-        img.style.width = '100px';
-        img.style.height = '100px';
-        img.style.objectFit = 'cover';
-        img.style.borderRadius = '4px';
-        preview.appendChild(img);
+    imageUrls.forEach((url, index) => {
+        createImagePreviewItem(preview, url, index, true, previewId);
     });
+}
+
+function createImagePreviewItem(container, source, index, isExisting = false, containerId = 'imagePreview') {
+    const item = document.createElement('div');
+    item.className = 'image-preview-item';
+    item.setAttribute('data-index', index);
+    if (isExisting) {
+        item.setAttribute('data-existing', 'true');
+    } else {
+        item.setAttribute('data-new', 'true');
+    }
+    
+    const img = document.createElement('img');
+    img.src = source;
+    img.className = 'image-preview-img';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.borderRadius = '8px';
+    
+    const controls = document.createElement('div');
+    controls.className = 'image-preview-controls';
+    
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'image-preview-btn image-preview-btn-up';
+    btnUp.setAttribute('aria-label', 'Move image up');
+    btnUp.addEventListener('click', (e) => {
+        e.preventDefault();
+        moveImageUp(item, containerId);
+    });
+    
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'image-preview-btn image-preview-btn-down';
+    btnDown.setAttribute('aria-label', 'Move image down');
+    btnDown.addEventListener('click', (e) => {
+        e.preventDefault();
+        moveImageDown(item, containerId);
+    });
+    
+    const btnMain = document.createElement('button');
+    btnMain.type = 'button';
+    btnMain.className = 'image-preview-btn image-preview-btn-main';
+    btnMain.setAttribute('aria-label', 'Mark as main image');
+    btnMain.addEventListener('click', (e) => {
+        e.preventDefault();
+        markMainImage(item, containerId);
+    });
+    
+    const btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'image-preview-btn image-preview-btn-delete';
+    btnDelete.setAttribute('aria-label', 'Delete image');
+    btnDelete.addEventListener('click', (e) => {
+        e.preventDefault();
+        deleteImage(item, containerId);
+    });
+    
+    controls.appendChild(btnUp);
+    controls.appendChild(btnDown);
+    controls.appendChild(btnMain);
+    controls.appendChild(btnDelete);
+    
+    item.appendChild(img);
+    item.appendChild(controls);
+    container.appendChild(item);
+}
+
+function moveImageUp(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    const currentIndex = items.indexOf(item);
+    
+    if (currentIndex > 0) {
+        const prevItem = items[currentIndex - 1];
+        container.insertBefore(item, prevItem);
+        updateImageIndices(container);
+    }
+}
+
+function moveImageDown(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    const currentIndex = items.indexOf(item);
+    
+    if (currentIndex < items.length - 1) {
+        const nextItem = items[currentIndex + 1];
+        container.insertBefore(nextItem, item);
+        updateImageIndices(container);
+    }
+}
+
+function markMainImage(item, containerId) {
+    const container = document.getElementById(containerId);
+    const items = container.querySelectorAll('.image-preview-item');
+    
+    items.forEach(i => i.classList.remove('main-image'));
+    item.classList.add('main-image');
+}
+
+function deleteImage(item, containerId) {
+    item.remove();
+    const container = document.getElementById(containerId);
+    updateImageIndices(container);
+}
+
+function updateImageIndices(container) {
+    const items = container.querySelectorAll('.image-preview-item');
+    items.forEach((item, index) => {
+        item.setAttribute('data-index', index);
+    });
+}
+
+function getOrderedImages(containerId) {
+    const container = document.getElementById(containerId);
+    const items = Array.from(container.querySelectorAll('.image-preview-item'));
+    
+    return items.map(item => ({
+        src: item.querySelector('.image-preview-img').src,
+        isMain: item.classList.contains('main-image'),
+        isNew: item.hasAttribute('data-new'),
+        isExisting: item.hasAttribute('data-existing')
+    }));
 }
 
 // Handle image file selection for sale cars
@@ -2980,19 +3525,12 @@ document.getElementById('carImages')?.addEventListener('change', function(e) {
     const files = Array.from(e.target.files);
     const preview = document.getElementById('imagePreview');
     if (preview) {
-        // Don't clear existing images, just add new ones
+        let startIndex = preview.querySelectorAll('.image-preview-item').length;
         
-        files.forEach(file => {
+        files.forEach((file, fileIndex) => {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.setAttribute('data-new', 'true');
-                img.style.width = '100px';
-                img.style.height = '100px';
-                img.style.objectFit = 'cover';
-                img.style.borderRadius = '4px';
-                preview.appendChild(img);
+            reader.onload = function(fileEvent) {
+                createImagePreviewItem(preview, fileEvent.target.result, startIndex + fileIndex, false, 'imagePreview');
             };
             reader.readAsDataURL(file);
         });
@@ -3004,19 +3542,12 @@ document.getElementById('carImagesRent')?.addEventListener('change', function(e)
     const files = Array.from(e.target.files);
     const preview = document.getElementById('imagePreviewRent');
     if (preview) {
-        // Don't clear existing images, just add new ones
+        let startIndex = preview.querySelectorAll('.image-preview-item').length;
         
-        files.forEach(file => {
+        files.forEach((file, fileIndex) => {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.setAttribute('data-new', 'true');
-                img.style.width = '100px';
-                img.style.height = '100px';
-                img.style.objectFit = 'cover';
-                img.style.borderRadius = '4px';
-                preview.appendChild(img);
+            reader.onload = function(fileEvent) {
+                createImagePreviewItem(preview, fileEvent.target.result, startIndex + fileIndex, false, 'imagePreviewRent');
             };
             reader.readAsDataURL(file);
         });
@@ -3108,7 +3639,7 @@ async function handleCarFormSubmit(e) {
         return;
     }
     
-    // Upload images first if any are selected
+    // Upload images first if any new files are selected
     let uploadedImageUrls = [];
     try {
         const imageInput = type === 'sale' ? document.getElementById('carImages') : document.getElementById('carImagesRent');
@@ -3120,6 +3651,10 @@ async function handleCarFormSubmit(e) {
         return;
     }
     
+    // Get ordered images from preview
+    const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
+    const orderedImages = getOrderedImages(previewId);
+    
     const carData = {
         brand: brand,
         model: model,
@@ -3128,43 +3663,31 @@ async function handleCarFormSubmit(e) {
         description: document.getElementById('carDescription').value || ''
     };
 
-    // Add uploaded images to car data
-    if (uploadedImageUrls.length > 0) {
-        // If editing, merge with existing images, otherwise use new images
-        if (carId) {
-            // Get existing images from preview (if any were displayed)
-            const existingImages = [];
-            const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
-            const preview = document.getElementById(previewId);
-            if (preview) {
-                const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-                existingImgs.forEach(img => {
-                    if (img.src && !img.src.startsWith('data:')) {
-                        existingImages.push(img.src);
-                    }
-                });
-            }
-            // Merge existing with new images
-            carData.images = [...existingImages, ...uploadedImageUrls];
-        } else {
-            carData.images = uploadedImageUrls;
-        }
-    } else if (carId) {
-        // If editing but no new images, preserve existing images
-        const previewId = type === 'sale' ? 'imagePreview' : 'imagePreviewRent';
-        const preview = document.getElementById(previewId);
-        if (preview) {
-            const existingImgs = preview.querySelectorAll('img[data-existing="true"]');
-            const existingImages = [];
-            existingImgs.forEach(img => {
-                if (img.src && !img.src.startsWith('data:')) {
-                    existingImages.push(img.src);
-                }
-            });
-            if (existingImages.length > 0) {
-                carData.images = existingImages;
+    // Build final image array with proper ordering and main image designation
+    const finalImages = [];
+    let mainImageUrl = null;
+    
+    orderedImages.forEach((imgInfo, index) => {
+        const url = imgInfo.src;
+        // Skip data: URLs (new images that need to be uploaded)
+        if (!url.startsWith('data:')) {
+            finalImages.push(url);
+            // Set main image if marked
+            if (imgInfo.isMain) {
+                mainImageUrl = url;
             }
         }
+    });
+    
+    // Add newly uploaded images in order
+    uploadedImageUrls.forEach(url => {
+        finalImages.push(url);
+    });
+    
+    if (finalImages.length > 0) {
+        carData.images = finalImages;
+        // Set the main image to the first image if no specific main image was marked
+        carData.image = mainImageUrl || finalImages[0];
     }
 
     if (type === 'sale') {
@@ -3477,6 +4000,7 @@ function updateContactPageWithSettings(settings = {}) {
     const phone = settings.phoneNumber || '';
     const email = settings.emailAddress || '';
     const address = settings.address || '';
+    const businessHours = settings.businessHours || '';
 
     const contactPhoneEl = document.getElementById('contactPhone');
     if (contactPhoneEl) {
@@ -3501,6 +4025,11 @@ function updateContactPageWithSettings(settings = {}) {
     const bringMeHereBtn = document.getElementById('bringMeHereBtn');
     if (bringMeHereBtn && address) {
         bringMeHereBtn.setAttribute('data-address', address);
+    }
+
+    const businessHoursEl = document.getElementById('businessHours');
+    if (businessHoursEl) {
+        businessHoursEl.innerHTML = businessHours ? formatMultilineText(businessHours) : '';
     }
 }
 
@@ -4728,4 +5257,399 @@ window.updateRequestPrice = updateRequestPrice;
 window.clearCustomPrice = clearCustomPrice;
 window.updateFuelLevel = updateFuelLevel;
 
+// ==================== SERVICE MANAGEMENT ====================
+
+// Load all services for admin
+async function loadAdminServices() {
+    const servicesList = document.getElementById('servicesList');
+    console.log('loadAdminServices called, authToken:', !!authToken, 'servicesList exists:', !!servicesList);
+    
+    if (!authToken) {
+        console.log('No auth token, showing login message');
+        if (servicesList) {
+            servicesList.innerHTML = '<p style="color: var(--text-gray); text-align: center; padding: 20px;">Please log in to manage services.</p>';
+        }
+        return;
+    }
+
+    try {
+        console.log('Fetching services from /api/services/admin/all');
+        const response = await fetch(`${API_BASE}/services/admin/all`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load services: ${response.status}`);
+        }
+
+        const services = await response.json();
+        console.log('Services loaded:', services.length, services);
+        displayAdminServices(services);
+    } catch (error) {
+        console.error('Error loading services:', error);
+        if (servicesList) {
+            servicesList.innerHTML = `<p style="color: var(--text-gray); text-align: center; padding: 20px;">Error loading services: ${error.message}</p>`;
+        }
+    }
+}
+
+// Display services in admin panel
+function displayAdminServices(services) {
+    const servicesList = document.getElementById('servicesList');
+    if (!servicesList) return;
+
+    if (services.length === 0) {
+        servicesList.innerHTML = '<p style="color: var(--text-gray); text-align: center; padding: 20px;">No services yet. Click "Add New Service" to create one.</p>';
+        return;
+    }
+
+    servicesList.innerHTML = services.map(service => `
+        <div class="admin-service-card">
+            <div class="service-card-header">
+                <h3>${escapeHtml(service.title)}</h3>
+                <div class="service-card-actions">
+                    <button class="btn-icon" onclick="editService('${service._id}')" title="Edit">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <button class="btn-icon btn-danger" onclick="deleteService('${service._id}')" title="Delete">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <p class="service-short-desc">${escapeHtml(service.shortDescription || '')}</p>
+            <div class="service-meta">
+                <span class="service-order">Order: ${service.order}</span>
+                <span class="service-status ${service.isActive ? 'active' : 'inactive'}">
+                    ${service.isActive ? 'Active' : 'Inactive'}
+                </span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Open service form modal
+function openServiceForm(serviceId = null) {
+    const modal = document.getElementById('serviceFormModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        createServiceFormModal();
+        setTimeout(() => openServiceForm(serviceId), 100);
+        return;
+    }
+
+    const form = document.getElementById('serviceForm');
+    const modalTitle = modal.querySelector('.modal-title');
+    
+    if (serviceId) {
+        modalTitle.textContent = 'Edit Service';
+        form.setAttribute('data-service-id', serviceId);
+        loadServiceData(serviceId);
+    } else {
+        modalTitle.textContent = 'Add New Service';
+        form.removeAttribute('data-service-id');
+        form.reset();
+    }
+
+    modal.style.display = 'block';
+}
+
+// Create service form modal
+function createServiceFormModal() {
+    const modalHTML = `
+        <div id="serviceFormModal" class="modal">
+            <div class="modal-content" style="max-width: 700px;">
+                <span class="close-modal" onclick="closeServiceModal()">&times;</span>
+                <h2 class="modal-title">Add New Service</h2>
+                <form id="serviceForm">
+                    <div class="form-group">
+                        <label for="serviceTitle">Title *</label>
+                        <input type="text" id="serviceTitle" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceShortDesc">Short Description *</label>
+                        <textarea id="serviceShortDesc" name="shortDescription" rows="2" maxlength="200" required></textarea>
+                        <small style="color: var(--text-gray);">Max 200 characters</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceFullDesc">Full Description *</label>
+                        <textarea id="serviceFullDesc" name="fullDescription" rows="6" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceIcon">Icon Class (FontAwesome)</label>
+                        <input type="text" id="serviceIcon" name="icon" placeholder="fas fa-cog">
+                        <small style="color: var(--text-gray);">Example: fas fa-car, fas fa-wrench, fas fa-oil-can</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceImages">Photos (Optional)</label>
+                        <input type="file" id="serviceImages" name="images" multiple accept="image/*" style="display: none;">
+                        <button type="button" class="btn-secondary" id="uploadImagesBtn" style="width: 100%; padding: 10px; background: rgba(154, 232, 255, 0.1); border: 1px dashed rgba(154, 232, 255, 0.5); border-radius: 8px; color: var(--accent-color); cursor: pointer;">
+                            Choose Photos
+                        </button>
+                        <small style="color: var(--text-gray);">You can upload multiple photos. One will be displayed on the service card.</small>
+                        <div id="serviceImagePreview" class="service-image-preview" style="margin-top: 15px; display: none;"></div>
+                    </div>
+                    <input type="hidden" id="serviceMainImage" name="mainImage" value="">
+                    <input type="hidden" id="serviceAllImages" name="allImages" value="">
+                    <div class="form-group">
+                        <label for="serviceOrder">Display Order</label>
+                        <input type="number" id="serviceOrder" name="order" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="serviceIsActive" name="isActive" checked>
+                            <span>Active (visible on website)</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-primary">Save Service</button>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Add event listeners
+    const uploadBtn = document.getElementById('uploadImagesBtn');
+    const fileInput = document.getElementById('serviceImages');
+    
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleServiceImageSelection);
+    
+    // Add form submit handler
+    document.getElementById('serviceForm').addEventListener('submit', handleServiceFormSubmit);
+}
+
+// Handle service image selection
+async function handleServiceImageSelection(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const uploadBtn = document.getElementById('uploadImagesBtn');
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Uploading...';
+
+    try {
+        const formData = new FormData();
+        for (let file of files) {
+            formData.append('images', file);
+        }
+
+        const response = await fetch(`${API_BASE}/upload/images`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to upload images');
+        }
+
+        const data = await response.json();
+        const imageUrls = data.urls || [];
+
+        // Store image data
+        window.serviceUploadedImages = imageUrls;
+        document.getElementById('serviceAllImages').value = JSON.stringify(imageUrls);
+        document.getElementById('serviceMainImage').value = imageUrls[0] || '';
+
+        // Display preview
+        displayServiceImagePreviews(imageUrls);
+
+        uploadBtn.textContent = 'Choose Photos';
+        uploadBtn.disabled = false;
+    } catch (error) {
+        console.error('Error uploading images:', error);
+        alert('Error uploading images. Please try again.');
+        uploadBtn.textContent = 'Choose Photos';
+        uploadBtn.disabled = false;
+    }
+}
+
+// Display service image previews with main image selector
+function displayServiceImagePreviews(imageUrls) {
+    const preview = document.getElementById('serviceImagePreview');
+    
+    if (!imageUrls || imageUrls.length === 0) {
+        preview.style.display = 'none';
+        return;
+    }
+
+    let mainImageUrl = document.getElementById('serviceMainImage').value || imageUrls[0];
+
+    const previewHTML = `
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            ${imageUrls.map((url, index) => `
+                <div class="service-thumb-wrapper" style="position: relative; border-radius: 8px; overflow: hidden; cursor: pointer;" onclick="setServiceMainImage('${escapeHtml(url)}')">
+                    <img src="${escapeHtml(url)}" alt="Service image ${index + 1}" 
+                         style="width: 80px; height: 80px; object-fit: cover; border: ${url === mainImageUrl ? '3px solid var(--accent-color)' : '2px solid rgba(255,255,255,0.2)'}; border-radius: 8px; transition: all 0.2s;">
+                    ${url === mainImageUrl ? '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--accent-color); font-weight: bold; font-size: 18px;">★</div>' : ''}
+                </div>
+            `).join('')}
+        </div>
+        <small style="display: block; margin-top: 10px; color: var(--text-gray);">Click an image to set it as the main photo for the service card</small>
+    `;
+
+    preview.innerHTML = previewHTML;
+    preview.style.display = 'block';
+}
+
+// Set service main image
+function setServiceMainImage(imageUrl) {
+    document.getElementById('serviceMainImage').value = imageUrl;
+    const allImages = window.serviceUploadedImages || [];
+    displayServiceImagePreviews(allImages);
+}
+
+// Load service data for editing
+async function loadServiceData(serviceId) {
+    if (!authToken) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/services/${serviceId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) throw new Error('Failed to load service');
+
+        const service = await response.json();
+        
+        document.getElementById('serviceTitle').value = service.title || '';
+        document.getElementById('serviceShortDesc').value = service.shortDescription || '';
+        document.getElementById('serviceFullDesc').value = service.fullDescription || '';
+        document.getElementById('serviceIcon').value = service.icon || '';
+        document.getElementById('serviceOrder').value = service.order || 0;
+        document.getElementById('serviceIsActive').checked = service.isActive !== false;
+
+        // Load existing images
+        if (service.images && service.images.length > 0) {
+            window.serviceUploadedImages = service.images;
+            document.getElementById('serviceAllImages').value = JSON.stringify(service.images);
+            document.getElementById('serviceMainImage').value = service.mainImage || service.images[0] || '';
+            displayServiceImagePreviews(service.images);
+        }
+    } catch (error) {
+        console.error('Error loading service:', error);
+        alert('Error loading service data');
+    }
+}
+
+// Handle service form submission
+async function handleServiceFormSubmit(e) {
+    e.preventDefault();
+    if (!authToken) return;
+
+    const form = e.target;
+    const serviceId = form.getAttribute('data-service-id');
+    const isEdit = !!serviceId;
+
+    const serviceData = {
+        title: document.getElementById('serviceTitle').value.trim(),
+        shortDescription: document.getElementById('serviceShortDesc').value.trim(),
+        fullDescription: document.getElementById('serviceFullDesc').value.trim(),
+        icon: document.getElementById('serviceIcon').value.trim() || 'fas fa-cog',
+        order: parseInt(document.getElementById('serviceOrder').value) || 0,
+        isActive: document.getElementById('serviceIsActive').checked
+    };
+
+    // Add images if uploaded
+    const allImagesStr = document.getElementById('serviceAllImages').value;
+    const mainImage = document.getElementById('serviceMainImage').value;
+    
+    if (allImagesStr) {
+        try {
+            const images = JSON.parse(allImagesStr);
+            serviceData.images = images;
+            if (mainImage) {
+                serviceData.mainImage = mainImage;
+            }
+        } catch (error) {
+            console.error('Error parsing images:', error);
+        }
+    }
+
+    try {
+        const url = isEdit ? `${API_BASE}/services/${serviceId}` : `${API_BASE}/services`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(serviceData)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to save service');
+        }
+
+        closeServiceModal();
+        loadAdminServices();
+    } catch (error) {
+        console.error('Error saving service:', error);
+        alert(error.message || 'Error saving service');
+    }
+}
+
+// Edit service
+function editService(serviceId) {
+    openServiceForm(serviceId);
+}
+
+// Delete service
+async function deleteService(serviceId) {
+    if (!authToken) return;
+    if (!confirm('Are you sure you want to delete this service?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/services/${serviceId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete service');
+        }
+
+        loadAdminServices();
+    } catch (error) {
+        console.error('Error deleting service:', error);
+        alert('Error deleting service');
+    }
+}
+
+// Close service modal
+function closeServiceModal() {
+    const modal = document.getElementById('serviceFormModal');
+    if (modal) {
+        modal.style.display = 'none';
+        const form = document.getElementById('serviceForm');
+        if (form) form.reset();
+    }
+}
+
+// Make service functions globally accessible
+window.editService = editService;
+window.deleteService = deleteService;
+window.closeServiceModal = closeServiceModal;
+
+//# sourceMappingURL=app.js.map
 //# sourceMappingURL=app.js.map

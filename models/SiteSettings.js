@@ -1,87 +1,36 @@
 const mongoose = require('mongoose');
 
-const siteSettingsSchema = new mongoose.Schema({
-    siteTitle: {
-        type: String,
-        default: 'Sarasota Automotive'
-    },
-    logoUrl: {
-        type: String,
-        default: '/logo.avif'
-    },
-    logoText: {
-        type: String,
-        default: 'Sarasota Automotive'
-    },
-    backgroundImageUrl: {
-        type: String,
-        default: '/site_bg.avif'
-    },
-    phoneNumber: {
-        type: String,
-        default: '(941) 555-0123'
-    },
-    emailAddress: {
-        type: String,
-        default: 'info@sarasotaautomotive.com'
-    },
-    address: {
-        type: String,
-            default: '5671 McIntosh Rd Sarasota, FL 34233'
-    },
-    adminEmail: {
-        type: String,
-        default: 'info@sarasotaautomotive.com'
-    },
-    menuBackgroundColor: {
-        type: String,
-        default: 'rgba(8, 36, 48, 0.70)'
-    },
-    menuTextColor: {
-        type: String,
-        default: '#f4f7f9'
-    },
-    menuAccentColor: {
-        type: String,
-        default: '#85c4e4'
-    },
-    containerBackgroundColor: {
-        type: String,
-        default: 'rgba(14, 46, 60, 0.60)'
-    },
-    containerBorderColor: {
-        type: String,
-        default: 'rgba(194, 228, 242, 0.35)'
-    },
-    containerTextColor: {
-        type: String,
-        default: '#e6eef2'
-    },
-    googleAnalyticsId: {
-        type: String,
-        default: ''
-    },
-    contractTerms: {
-        type: String,
-        default: `By signing below, the renter agrees to return the vehicle in the same condition as received, except for normal wear and tear. Any damages beyond normal wear will be charged to the renter.
+// Canonical defaults (used for schema defaults and reset-to-defaults API)
+const DEFAULT_SETTINGS = Object.freeze({
+    siteTitle: 'Sarasota Automotive',
+    logoUrl: '/logo.avif',
+    logoText: 'Sarasota Automotive',
+    backgroundImageUrl: '/site_bg.avif',
+    phoneNumber: '(941) 555-0123',
+    emailAddress: 'info@sarasotaautomotive.com',
+    address: '5671 McIntosh Rd Sarasota, FL 34233',
+    adminEmail: 'info@sarasotaautomotive.com',
+    businessHours: 'Monday - Saturday: 9:00 AM - 6:00 PM\nSunday: Closed',
+    menuBackgroundColor: 'rgba(8, 36, 48, 0.70)',
+    menuTextColor: '#f4f7f9',
+    menuAccentColor: '#85c4e4',
+    containerBackgroundColor: 'rgba(14, 46, 60, 0.60)',
+    containerBorderColor: 'rgba(194, 228, 242, 0.35)',
+    containerTextColor: '#e6eef2',
+    googleAnalyticsId: '',
+    contractTerms: `By signing below, the renter agrees to return the vehicle in the same condition as received, except for normal wear and tear. Any damages beyond normal wear will be charged to the renter.
 
 The renter is responsible for all traffic violations, tolls, and parking fees during the rental period.
 
-Fuel must be returned at the same level as received, or a refueling fee will apply.`
-    },
-    salesContractTerms: {
-        type: String,
-        default: `By signing below, the buyer agrees to purchase the vehicle as described in this contract for the agreed-upon price.
+Fuel must be returned at the same level as received, or a refueling fee will apply.`,
+    salesContractTerms: `By signing below, the buyer agrees to purchase the vehicle as described in this contract for the agreed-upon price.
 
 The vehicle is sold "as is" with no warranties expressed or implied, except as required by law.
 
 The buyer is responsible for all transfer fees, registration, and title fees.
 
-Full payment must be received before the vehicle title is transferred.`
-    },
-    privacyPolicy: {
-        type: String,
-        default: `Sarasota Automotive LLC respects your privacy. This notice explains how we collect, use, and protect personal information that you share through our website forms.
+Full payment must be received before the vehicle title is transferred.`,
+    privacyPolicy: `Sarasota Automotive LLC respects your privacy. This notice explains how we collect, use, and protect personal information that you share through our website forms.
 
 Information We Collect
 
@@ -118,20 +67,116 @@ To exercise these rights, email us at info@sarasotaautomotive.com or call our of
 Updates
 
 We may update this policy from time to time. The latest version will always be available on this page.`
+});
+
+const siteSettingsSchema = new mongoose.Schema({
+    siteTitle: {
+        type: String,
+        default: DEFAULT_SETTINGS.siteTitle
+    },
+    logoUrl: {
+        type: String,
+        default: DEFAULT_SETTINGS.logoUrl
+    },
+    logoText: {
+        type: String,
+        default: DEFAULT_SETTINGS.logoText
+    },
+    backgroundImageUrl: {
+        type: String,
+        default: DEFAULT_SETTINGS.backgroundImageUrl
+    },
+    phoneNumber: {
+        type: String,
+        default: DEFAULT_SETTINGS.phoneNumber
+    },
+    emailAddress: {
+        type: String,
+        default: DEFAULT_SETTINGS.emailAddress
+    },
+    address: {
+        type: String,
+        default: DEFAULT_SETTINGS.address
+    },
+    adminEmail: {
+        type: String,
+        default: DEFAULT_SETTINGS.adminEmail
+    },
+    businessHours: {
+        type: String,
+        default: DEFAULT_SETTINGS.businessHours
+    },
+    menuBackgroundColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.menuBackgroundColor
+    },
+    menuTextColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.menuTextColor
+    },
+    menuAccentColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.menuAccentColor
+    },
+    containerBackgroundColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.containerBackgroundColor
+    },
+    containerBorderColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.containerBorderColor
+    },
+    containerTextColor: {
+        type: String,
+        default: DEFAULT_SETTINGS.containerTextColor
+    },
+    googleAnalyticsId: {
+        type: String,
+        default: DEFAULT_SETTINGS.googleAnalyticsId
+    },
+    contractTerms: {
+        type: String,
+        default: DEFAULT_SETTINGS.contractTerms
+    },
+    salesContractTerms: {
+        type: String,
+        default: DEFAULT_SETTINGS.salesContractTerms
+    },
+    privacyPolicy: {
+        type: String,
+        default: DEFAULT_SETTINGS.privacyPolicy
     }
 }, {
     timestamps: true
 });
 
 // Ensure only one settings document exists
+siteSettingsSchema.statics.getDefaultSettings = function() {
+    return { ...DEFAULT_SETTINGS };
+};
+
+siteSettingsSchema.statics.resetToDefaults = async function() {
+    let settings = await this.findOne();
+    if (!settings) {
+        settings = new this(DEFAULT_SETTINGS);
+    } else {
+        settings.set(DEFAULT_SETTINGS);
+    }
+    await settings.save();
+    return settings;
+};
+
 siteSettingsSchema.statics.getSettings = async function() {
     let settings = await this.findOne();
     if (!settings) {
-        settings = new this();
+        settings = new this(DEFAULT_SETTINGS);
         await settings.save();
     }
     return settings;
 };
 
-module.exports = mongoose.model('SiteSettings', siteSettingsSchema);
+const SiteSettings = mongoose.model('SiteSettings', siteSettingsSchema);
+SiteSettings.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+
+module.exports = SiteSettings;
 

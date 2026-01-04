@@ -1,6 +1,6 @@
-# Sarasota Automotive Website
+# *Sarasota Automotive* Website
 
-A modern, full-featured website for Sarasota Automotive with inventory management, rental car system, and admin dashboard. Features a sleek glassmorphism UI design with responsive layout and comprehensive car management system.
+A modern, full-featured website for *Sarasota Automotive* with inventory management, rental car system, and admin dashboard. Built with Node.js/Express backend and vanilla JavaScript frontend.
 
 ## Features
 

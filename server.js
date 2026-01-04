@@ -4,6 +4,8 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+const User = require('./models/User');
+
 const app = express();
 
 // Middleware
@@ -23,6 +25,7 @@ app.use('/api/contact', require('./routes/contact'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/site-settings', require('./routes/siteSettings'));
+app.use('/api/services', require('./routes/services'));
 app.use('/feeds', require('./routes/feeds'));
 
 // Serve static files and handle client-side routing (only for GET requests)
@@ -55,8 +58,25 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sarasota_automotive';
 
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('Connected to MongoDB');
+    
+    // Initialize admin user if it doesn't exist
+    try {
+      const adminExists = await User.findOne({ role: 'admin' });
+      if (!adminExists) {
+        const admin = new User({
+          username: process.env.ADMIN_USERNAME || 'admin',
+          password: process.env.ADMIN_PASSWORD || 'admin123',
+          role: 'admin'
+        });
+        await admin.save();
+        console.log('Admin user created:', process.env.ADMIN_USERNAME || 'admin');
+      }
+    } catch (error) {
+      console.error('Error initializing admin user:', error.message);
+    }
+    
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

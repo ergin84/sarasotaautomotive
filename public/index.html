@@ -105,13 +105,6 @@
             </div>
         </section>
 
-        <!-- Home identity overlay -->
-        <div class="home-identity-panel">
-            <img src="logo.avif" alt="Sarasota Automotive Logo" class="home-identity-logo site-logo">
-            <h1 class="home-identity-title">Sarasota Automotive</h1>
-        </div>
-
-
         <!-- Inventory for Sale Page -->
         <section id="inventory-sale" class="page">
             <div class="page-container">
@@ -146,44 +139,53 @@
                 <div class="container">
                     <h1 class="page-title">Auto Repair Shop</h1>
                     <div class="services-intro">
-                        <p>At Sarasota Automotive LLC, we offer a wide range of automotive services to meet your needs. Whether you need a simple car check, tire change, oil & break checks, or a battery change, we've got you covered. Our goal is to keep your vehicle running smoothly and safely on the road.</p>
+                        <p>At <i>Sarasota Automotive</i> LLC, we offer a wide range of automotive services to meet your needs. Whether you need a simple car check, tire change, oil & break checks, or a battery change, we've got you covered. Our goal is to keep your vehicle running smoothly and safely on the road.</p>
                     </div>
-                    
-                    <div class="services-grid">
-                        <div class="service-card">
-                            <div class="service-image">
-                                <img src="https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=600&h=400&fit=crop" alt="Car Mechanic Repairs">
-                            </div>
-                            <div class="service-content">
-                                <h3 class="service-title">Car Mechanic</h3>
-                                <p class="service-subtitle">Repairs</p>
-                            </div>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-image">
-                                <img src="https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=600&h=400&fit=crop" alt="Car Engine Tune-ups">
-                            </div>
-                            <div class="service-content">
-                                <h3 class="service-title">Car Engine</h3>
-                                <p class="service-subtitle">Tune-ups</p>
-                            </div>
-                        </div>
-                        
-                        <div class="service-card">
-                            <div class="service-image">
-                                <img src="https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=600&h=400&fit=crop" alt="Engine Work Oil & Brake Care">
-                            </div>
-                            <div class="service-content">
-                                <h3 class="service-title">Engine Work</h3>
-                                <p class="service-subtitle">Oil & Brake Care</p>
-                            </div>
-                        </div>
-                    </div>
-                    
+                    <div id="servicesGrid" class="services-grid"></div>
                     <div class="services-contact-cta">
                         <p class="services-contact-text">Looking for someone to trust with your car?</p>
                         <a href="#" data-page="contact" class="services-contact-button">CONTACT US</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Service Detail Page -->
+        <section id="service-detail" class="page">
+            <div class="page-container">
+                <div class="container">
+                    <div class="service-detail-container">
+                        <button class="back-button" onclick="showPage('services'); return false;" title="Back to Services">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                            Back to Services
+                        </button>
+                        
+                        <div class="service-detail-content">
+                            <!-- Service Image Section -->
+                            <div class="service-detail-images">
+                                <div class="service-detail-main">
+                                    <img id="serviceDetailMainImage" src="" alt="Service" loading="lazy">
+                                </div>
+                                <div id="serviceDetailThumbnails" class="service-detail-thumbnails"></div>
+                            </div>
+
+                            <!-- Service Info Section -->
+                            <div class="service-detail-info">
+                                <h1 id="serviceDetailTitle" class="service-detail-title">Service Name</h1>
+                                
+                                <div class="service-detail-description" id="serviceDetailDescription">
+                                    <p>Loading service details...</p>
+                                </div>
+
+                                <!-- Call to Action -->
+                                <div class="service-detail-cta">
+                                    <a href="#contact" data-page="contact" class="btn-primary" style="display: inline-block;">Request This Service</a>
+                                    <button type="button" class="btn-secondary" onclick="showPage('services'); return false;">View Other Services</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -241,7 +243,7 @@
                                         <div class="contact-icon">🕒</div>
                                         <div class="contact-info-text">
                                             <strong>Business Hours</strong>
-                                            <span>Monday - Saturday: 9:00 AM - 6:00 PM<br>Sunday: Closed</span>
+                                            <span id="businessHours">Monday - Saturday: 9:00 AM - 6:00 PM<br>Sunday: Closed</span>
                                         </div>
                                     </div>
                                 </div>
@@ -276,7 +278,87 @@
                     <input type="password" id="adminPassword" placeholder="Password" required>
                     <button type="submit">Login</button>
                     <div id="loginError" class="error-message"></div>
+                    <div class="admin-links">
+                        <a href="#" class="admin-link" onclick="showPage('admin-forgot-password'); return false;">🔑 Forgot Password?</a>
+                    </div>
                 </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Change Password -->
+        <section id="admin-change-password" class="page">
+            <div class="page-container">
+                <div class="container">
+                    <h1 class="page-title">Change Password</h1>
+                    <div class="admin-page-back">
+                        <a href="#" onclick="showPage('admin-dashboard'); return false;">← Back to Dashboard</a>
+                    </div>
+                    <form class="admin-form" id="changePasswordForm">
+                        <div class="form-group">
+                            <label for="currentPassword">Current Password</label>
+                            <input type="password" id="currentPassword" placeholder="Enter your current password" required>
+                            <small class="form-help">Required to verify your identity</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <input type="password" id="newPassword" placeholder="Enter new password" required>
+                            <small class="form-help">Min 8 characters, mix of uppercase, lowercase, numbers</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmNewPassword">Confirm New Password</label>
+                            <input type="password" id="confirmNewPassword" placeholder="Confirm new password" required>
+                        </div>
+                        <div id="changePasswordError" class="error-message"></div>
+                        <div id="changePasswordSuccess" class="success-message"></div>
+                        <button type="submit" class="btn-primary">Change Password</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Forgot Password -->
+        <section id="admin-forgot-password" class="page">
+            <div class="page-container">
+                <div class="container">
+                    <h1 class="page-title">Reset Password</h1>
+                    <div class="admin-page-back">
+                        <a href="#" onclick="showPage('admin-login'); return false;">← Back to Login</a>
+                    </div>
+                    <form class="admin-form" id="forgotPasswordForm">
+                        <p class="form-description">Enter your username and we'll send a password reset link to your email.</p>
+                        <div class="form-group">
+                            <label for="resetUsername">Username</label>
+                            <input type="text" id="resetUsername" placeholder="Enter your username" required>
+                        </div>
+                        <div id="forgotPasswordError" class="error-message"></div>
+                        <div id="forgotPasswordSuccess" class="success-message"></div>
+                        <button type="submit" class="btn-primary">Send Reset Link</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Reset Password (with token) -->
+        <section id="admin-reset-password" class="page">
+            <div class="page-container">
+                <div class="container">
+                    <h1 class="page-title">Set New Password</h1>
+                    <form class="admin-form" id="resetPasswordForm">
+                        <p class="form-description">Enter your new password below.</p>
+                        <div class="form-group">
+                            <label for="resetNewPassword">New Password</label>
+                            <input type="password" id="resetNewPassword" placeholder="Enter new password" required>
+                            <small class="form-help">Min 8 characters, mix of uppercase, lowercase, numbers</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="resetConfirmPassword">Confirm Password</label>
+                            <input type="password" id="resetConfirmPassword" placeholder="Confirm new password" required>
+                        </div>
+                        <div id="resetPasswordError" class="error-message"></div>
+                        <div id="resetPasswordSuccess" class="success-message"></div>
+                        <button type="submit" class="btn-primary">Reset Password</button>
+                    </form>
                 </div>
             </div>
         </section>
@@ -293,8 +375,16 @@
                         <button class="admin-nav-btn" data-section="manage-rent">Manage Rent Cars</button>
                         <button class="admin-nav-btn" data-section="rental-requests">Rental Requests</button>
                         <button class="admin-nav-btn" data-section="client-requests">Sale Requests</button>
+                        <button class="admin-nav-btn" data-section="manage-services">Manage Services</button>
                     </div>
                     <div class="admin-nav-right">
+                        <button class="admin-nav-btn-icon" onclick="showPage('admin-change-password'); return false;" title="Change Password">
+                            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 1s8 3 8 11v5c0 1.25-.756 2.402-2 2.816V21a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-.184C4.756 18.402 4 17.25 4 16v-5c0-8 8-11 8-11z"></path>
+                                <line x1="7" y1="10" x2="17" y2="10"></line>
+                            </svg>
+                            <span class="text">Password</span>
+                        </button>
                         <button class="admin-nav-btn-icon" data-section="site-settings" title="Site Settings">
                             <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -313,30 +403,81 @@
                     </div>
                 </div>
 
-                <!-- Dashboard Stats -->
-                <div id="dashboard-stats" class="admin-section active">
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <h3>Total Cars for Sale</h3>
-                            <p id="stat-total-sale">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Available for Sale</h3>
-                            <p id="stat-available-sale">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Sold Cars</h3>
-                            <p id="stat-sold">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Cars for Rent</h3>
-                            <p id="stat-rent">0</p>
-                        </div>
-                        <div class="stat-card">
-                            <h3>New Client Requests</h3>
-                            <p id="stat-new-requests">0</p>
+                <!-- Dashboard Overview -->
+                <div id="dashboard" class="admin-section active">
+                    <!-- Stats Grid -->
+                    <div class="dashboard-stats-section">
+                        <h2 class="section-title">Quick Stats</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <h3>Cars for Sale</h3>
+                                    <span class="stat-icon">🚗</span>
+                                </div>
+                                <div class="stat-body">
+                                    <div class="stat-number" id="stat-total-sale">0</div>
+                                    <div class="stat-details">
+                                        <div class="stat-detail-item">
+                                            <span class="stat-label">Available:</span>
+                                            <span class="stat-value" id="stat-available-sale-detail">0</span>
+                                        </div>
+                                        <div class="stat-detail-item">
+                                            <span class="stat-label">Sold:</span>
+                                            <span class="stat-value" id="stat-sold-detail">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <h3>Cars for Rent</h3>
+                                    <span class="stat-icon">🔑</span>
+                                </div>
+                                <div class="stat-body">
+                                    <div class="stat-number" id="stat-rent">0</div>
+                                    <p class="stat-desc">Available rental vehicles</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <h3>Services</h3>
+                                    <span class="stat-icon">🔧</span>
+                                </div>
+                                <div class="stat-body">
+                                    <div class="stat-number" id="stat-total-services">0</div>
+                                    <p class="stat-desc">Available repair services</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <h3>Client Requests</h3>
+                                    <span class="stat-icon">📋</span>
+                                </div>
+                                <div class="stat-body">
+                                    <div class="stat-number" id="stat-new-requests">0</div>
+                                    <p class="stat-desc">New requests awaiting review</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Services Preview Section -->
+                    <div class="dashboard-services-section">
+                        <div class="section-header">
+                            <h2 class="section-title">Services Overview</h2>
+                            <button class="btn-primary btn-sm" id="dashboardAddServiceBtn">Add Service</button>
+                        </div>
+                        <div id="dashboardServicesList" class="dashboard-services-grid"></div>
+                    </div>
+                </div>
+
+                <!-- Manage Services -->
+                <div id="manage-services" class="admin-section">
+                    <div class="admin-header">
+                        <h2>Manage Services</h2>
+                        <button class="btn-primary" id="addServiceBtn">Add New Service</button>
+                    </div>
+                    <div id="servicesList" class="admin-services-list"></div>
                 </div>
 
                 <!-- Manage Sale Cars -->
@@ -459,6 +600,11 @@
                                 <label for="address">Address</label>
         <input type="text" id="address" name="address" placeholder="5671 McIntosh Rd Sarasota, FL 34233">
                             </div>
+                            <div class="form-group">
+                                <label for="businessHours">Business Hours</label>
+                                <textarea id="businessHoursInput" name="businessHours" rows="3" placeholder="Monday - Saturday: 9:00 AM - 6:00 PM&#10;Sunday: Closed"></textarea>
+                                <small style="color: rgba(255,255,255,0.6); font-size: 13px;">Use line breaks to separate days; the public page will show each line.</small>
+                            </div>
                         </div>
 
                         <!-- Logo Upload -->
@@ -557,7 +703,7 @@
                         </div>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn-primary">Save Settings</button>
+                            <button type="submit" class="btn-primary" id="saveSettingsBtn">Save Settings</button>
                             <button type="button" class="btn-secondary" id="resetSettingsBtn">Reset to Defaults</button>
                         </div>
                     </form>
@@ -752,7 +898,27 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Lightbox Modal for Car Image Gallery -->
+    <div id="imageLightbox" class="image-lightbox">
+        <div class="lightbox-content">
+            <button id="lightboxCloseBtn" class="lightbox-close" aria-label="Close lightbox">&times;</button>
+            <button id="lightboxPrevBtn" class="lightbox-nav lightbox-prev" aria-label="Previous image">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <img id="lightboxImage" src="" alt="Lightbox image" class="lightbox-image">
+            <button id="lightboxNextBtn" class="lightbox-nav lightbox-next" aria-label="Next image">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+            <div class="lightbox-counter" id="lightboxCounter">1 of 1</div>
+        </div>
+    </div>
+
+    <script src="js/modules/lightbox.js"></script>
+    <script src="app.legacy.js"></script>
 
     <div id="cookieConsentBar" class="cookie-consent hidden" role="region" aria-label="Cookie consent banner">
         <div class="cookie-consent-content">

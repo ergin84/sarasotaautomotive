@@ -21,6 +21,16 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get immutable defaults (useful for admin UI reset previews)
+router.get('/defaults', auth, async (req, res) => {
+    try {
+        res.json(SiteSettings.getDefaultSettings());
+    } catch (error) {
+        console.error('Error fetching default site settings:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
 // Update site settings (admin only)
 router.put('/', auth, async (req, res) => {
     try {
@@ -30,7 +40,8 @@ router.put('/', auth, async (req, res) => {
         if (!settings) {
             settings = new SiteSettings(req.body);
         } else {
-            settings.set(req.body, { strict: true });
+            // Apply incoming fields without overriding schema strictness
+            settings.set(req.body);
         }
 
         if (!settings.backgroundImageUrl) {
@@ -46,6 +57,18 @@ router.put('/', auth, async (req, res) => {
     } catch (error) {
         console.error('Error updating site settings:', error);
         res.status(400).json({ message: 'Error updating settings', error: error.message });
+    }
+});
+
+// Reset to canonical defaults (admin only)
+router.post('/reset', auth, async (req, res) => {
+    try {
+        console.log('POST /api/site-settings/reset - Resetting to defaults');
+        const settings = await SiteSettings.resetToDefaults();
+        res.json(settings.toObject());
+    } catch (error) {
+        console.error('Error resetting site settings:', error);
+        res.status(500).json({ message: 'Error resetting settings', error: error.message });
     }
 });
 
