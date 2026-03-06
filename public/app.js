@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function formatCarStatus(status) {
     if (status === 'sold') return 'SOLD OUT';
     if (status === 'coming_soon') return 'COMING SOON';
+    if (status === 'pending') return 'PENDING';
     return (status || '').toUpperCase();
 }
 
@@ -2850,6 +2851,10 @@ function displayAdminCars(cars, containerId, type) {
             mileageText = ` | ${car.numPersons} persons`;
         }
         
+        const isSale = type === 'sale';
+        const isSold = car.status === 'sold';
+        const isPending = car.status === 'pending';
+
         return `
         <div class="admin-car-item">
             <div>
@@ -2859,7 +2864,10 @@ function displayAdminCars(cars, containerId, type) {
             </div>
             <div class="admin-car-actions">
                 <button class="btn-edit" onclick="editCar('${car._id}', '${type}')">Edit</button>
-                ${type === 'sale' ? `<button class="btn-sold" onclick="markAsSold('${car._id}')" ${car.status === 'sold' ? 'disabled' : ''}>Mark Sold</button>` : ''}
+                ${isSale ? `
+                    <button class="btn-pending" onclick="markAsPending('${car._id}')" ${isPending ? 'disabled' : ''}>Mark Pending</button>
+                    <button class="btn-sold" onclick="markAsSold('${car._id}')" ${isSold ? 'disabled' : ''}>Mark Sold</button>
+                ` : ''}
                 <button class="btn-delete" onclick="deleteCar('${car._id}', '${type}')">Delete</button>
             </div>
         </div>
@@ -4409,6 +4417,29 @@ async function markAsSold(carId) {
     } catch (error) {
         console.error('Error:', error);
         alert('Error marking car as sold');
+    }
+}
+
+// Expose car status helpers globally for inline handlers
+window.markAsSold = markAsSold;
+window.markAsPending = markAsPending;
+
+async function markAsPending(carId) {
+    try {
+        const response = await fetch(`${API_BASE}/cars/${carId}/pending`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.ok) {
+            loadAdminCars('sale');
+            loadCarsForSale();
+        } else {
+            alert('Error marking car as pending');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error marking car as pending');
     }
 }
 

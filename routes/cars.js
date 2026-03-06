@@ -114,6 +114,23 @@ router.patch('/:id/sold', auth, async (req, res) => {
   }
 });
 
+// Mark car as pending
+router.patch('/:id/pending', auth, async (req, res) => {
+  try {
+    const car = await Car.findByIdAndUpdate(
+      req.params.id,
+      { status: 'pending' },
+      { new: true }
+    );
+    if (!car) {
+      return res.status(404).json({ message: 'Car not found' });
+    }
+    res.json(car);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
 
 

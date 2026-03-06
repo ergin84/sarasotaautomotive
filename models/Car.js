@@ -17,7 +17,7 @@ const carSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['available', 'sold', 'coming_soon'],
+    enum: ['available', 'pending', 'sold', 'coming_soon'],
     default: 'available'
   },
   description: {
@@ -46,7 +46,7 @@ const carSchema = new mongoose.Schema({
   },
   fuelType: {
     type: String,
-    enum: ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'Plug-in Hybrid', 'LPG', 'CNG']
+    enum: ['Gas', 'Diesel', 'Electric', 'Hybrid', 'Plug-in Hybrid', 'LPG', 'CNG']
   },
   power: {
     type: Number // in HP or kW

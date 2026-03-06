@@ -201,7 +201,7 @@ The frontend uses **vanilla JavaScript** (no framework) with a monolithic main f
 - Brand, Model, Model Version
 - Mileage, First Registration Date
 - Gearbox Type (Manual/Automatic)
-- Fuel Type (Petrol/Diesel/Electric/Hybrid)
+ - Fuel Type (Gas/Diesel/Electric/Hybrid)
 - Power (HP)
 - Price
 - Vehicle Options (checkboxes)
