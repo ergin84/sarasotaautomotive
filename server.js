@@ -3,6 +3,10 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+// In production, also load .env.production if present (deploy renames it to .env; this is a fallback)
+if (process.env.NODE_ENV === 'production') {
+  require('dotenv').config({ path: path.join(__dirname, '.env.production') });
+}
 
 const User = require('./models/User');
 
@@ -60,7 +64,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/saraso
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('Connected to MongoDB');
-    
+    const smtpOk = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    console.log(smtpOk ? 'Mail (SMTP): configured' : 'Mail (SMTP): not configured (set SMTP_USER, SMTP_PASS in .env.deploy and redeploy)');
+
     // Initialize admin user if it doesn't exist
     try {
       const adminExists = await User.findOne({ role: 'admin' });

@@ -93,7 +93,7 @@ fi
 
 echo "🔍 Checking Node.js..."
 if ! command -v node >/dev/null 2>&1; then
-  NODE_VERSION="\${NODE_VERSION:-v20.18.1}"
+  NODE_VERSION="\${NODE_VERSION:-v22.12.0}"
   install_node_from_tarball() {
     echo "📦 Installing Node.js \${NODE_VERSION} from nodejs.org tarball..."
     mkdir -p /usr/local/src
@@ -116,7 +116,7 @@ if ! command -v node >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
   apt-get install -y curl
-  if curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; then
+  if curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; then
     apt-get install -y nodejs || install_node_from_tarball
   else
     echo "⚠️ NodeSource unavailable, attempting official tarball..."
