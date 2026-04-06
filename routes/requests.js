@@ -1,8 +1,7 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
 const RentalRequest = require('../models/RentalRequest');
 const Car = require('../models/Car');
-const SiteSettings = require('../models/SiteSettings');
+const { getAdminEmail, sendMail } = require('../services/email');
 
 const router = express.Router();
 
@@ -10,44 +9,11 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-async function getAdminEmail() {
-  try {
-    const settings = await SiteSettings.getSettings();
-    return normalizeString(settings?.adminEmail) || process.env.ADMIN_EMAIL || '';
-  } catch (error) {
-    console.error('Error reading site settings for admin email:', error);
-    return process.env.ADMIN_EMAIL || '';
-  }
-}
-
-let transporter = null;
-function ensureTransporter() {
-  if (transporter) return transporter;
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-  }
-  return transporter;
-}
-
 async function sendAdminNotificationEmail(request, car) {
   try {
     const toEmail = await getAdminEmail();
     if (!toEmail) {
       console.warn('Admin notification skipped: no admin email configured');
-      return;
-    }
-
-    const mailTransporter = ensureTransporter();
-    if (!mailTransporter) {
-      console.warn('Admin notification skipped: SMTP credentials not configured');
       return;
     }
 
@@ -78,8 +44,7 @@ async function sendAdminNotificationEmail(request, car) {
 
     lines.push(`<p><em>Submitted at ${new Date(request.createdAt).toLocaleString()}</em></p>`);
 
-    await mailTransporter.sendMail({
-      from: process.env.NOTIFY_FROM || process.env.SMTP_USER,
+    await sendMail({
       to: toEmail,
       subject: `New ${requestType} Request for ${carTitle}`,
       html: lines.join('\n')

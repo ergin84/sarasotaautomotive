@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 const auth = require('../middleware/auth');
@@ -11,18 +12,25 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer for file storage
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadsDir);
-    },
-    filename: function (req, file, cb) {
-        // Generate unique filename: timestamp-random-originalname
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, 'car-' + uniqueSuffix + ext);
-    }
-});
+const MAX_IMAGE_WIDTH = 1600;
+const MAX_IMAGE_HEIGHT = 1200;
+const IMAGE_QUALITY = 80;
+
+async function optimizeImageBuffer(buffer, outputPath) {
+    await sharp(buffer)
+        .rotate()
+        .resize({
+            width: MAX_IMAGE_WIDTH,
+            height: MAX_IMAGE_HEIGHT,
+            fit: 'inside',
+            withoutEnlargement: true
+        })
+        .webp({ quality: IMAGE_QUALITY })
+        .toFile(outputPath);
+}
+
+// Configure multer for file storage in memory so we can optimize before saving
+const storage = multer.memoryStorage();
 
 // File filter - only images
 const fileFilter = (req, file, cb) => {
@@ -48,16 +56,22 @@ const upload = multer({
 });
 
 // Upload multiple images
-router.post('/images', auth, upload.array('images', 10), (req, res) => {
+// NOTE: maxCount must be >= the maximum number of files the frontend can send at once.
+router.post('/images', auth, upload.array('images', 20), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ message: 'No files uploaded' });
         }
-        
-        // Return array of file URLs
-        const fileUrls = req.files.map(file => {
-            return `/uploads/${file.filename}`;
-        });
+
+        const fileUrls = [];
+        for (const file of req.files) {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const fileName = `car-${uniqueSuffix}.webp`;
+            const outputPath = path.join(uploadsDir, fileName);
+
+            await optimizeImageBuffer(file.buffer, outputPath);
+            fileUrls.push(`/uploads/${fileName}`);
+        }
         
         res.json({ 
             message: 'Files uploaded successfully',
@@ -141,42 +155,32 @@ router.post('/background', auth, bgUpload.single('background'), (req, res) => {
     }
 });
 
-// Configure multer for rental request photos
-const rentalPhotoStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        // Create rental-photos subdirectory
-        const rentalPhotosDir = path.join(uploadsDir, 'rental-photos');
-        if (!fs.existsSync(rentalPhotosDir)) {
-            fs.mkdirSync(rentalPhotosDir, { recursive: true });
-        }
-        cb(null, rentalPhotosDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, 'rental-' + uniqueSuffix + ext);
-    }
-});
+async function optimizeAndSaveImage(fileBuffer, destinationFolder, prefix = 'car') {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileName = `${prefix}-${uniqueSuffix}.webp`;
+    const destinationDir = path.join(uploadsDir, destinationFolder);
 
-const rentalPhotoUpload = multer({
-    storage: rentalPhotoStorage,
-    limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB max file size
-    },
-    fileFilter: fileFilter
-});
+    if (!fs.existsSync(destinationDir)) {
+        fs.mkdirSync(destinationDir, { recursive: true });
+    }
+
+    const outputPath = path.join(destinationDir, fileName);
+    await optimizeImageBuffer(fileBuffer, outputPath);
+    return fileName;
+}
 
 // Upload rental request photos
-router.post('/rental-photos/:requestId', auth, rentalPhotoUpload.array('photos', 20), (req, res) => {
+router.post('/rental-photos/:requestId', auth, upload.array('photos', 20), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ message: 'No files uploaded' });
         }
-        
-        // Return array of file URLs
-        const fileUrls = req.files.map(file => {
-            return `/uploads/rental-photos/${file.filename}`;
-        });
+
+        const fileUrls = [];
+        for (const file of req.files) {
+            const fileName = await optimizeAndSaveImage(file.buffer, 'rental-photos', 'rental');
+            fileUrls.push(`/uploads/rental-photos/${fileName}`);
+        }
         
         res.json({ 
             message: 'Photos uploaded successfully',

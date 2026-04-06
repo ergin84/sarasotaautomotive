@@ -116,11 +116,21 @@ function initializeLightbox() {
     console.log('Keyboard navigation added');
 }
 
-// Make functions globally available
+// Make functions globally available (for onclick handlers in dynamic HTML)
 window.openImageLightbox = openImageLightbox;
 window.closeLightbox = closeLightbox;
 window.nextLightboxImage = nextLightboxImage;
 window.prevLightboxImage = prevLightboxImage;
 window.initializeLightbox = initializeLightbox;
 
-console.log('Lightbox module loaded');
+// ES6 exports for module system
+export {
+    openImageLightbox,
+    closeLightbox,
+    updateLightboxImage,
+    nextLightboxImage,
+    prevLightboxImage,
+    initializeLightbox
+};
+
+console.log('Lightbox module loaded');;

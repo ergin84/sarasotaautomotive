@@ -1,22 +1,8 @@
 const express = require('express');
 const RentalRequest = require('../models/RentalRequest');
 const Car = require('../models/Car');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('../services/email');
 const router = express.Router();
-
-// Email transporter setup (only if credentials are provided)
-let transporter = null;
-if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: process.env.SMTP_PORT || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-}
 
 // Submit rental inquiry
 router.post('/inquiry', async (req, res) => {
@@ -44,10 +30,9 @@ router.post('/inquiry', async (req, res) => {
 
     await rentalRequest.save();
 
-    // Send email to owner
-    if (car.ownerEmail && transporter) {
-      const mailOptions = {
-        from: process.env.SMTP_USER,
+    // Send email to owner (fire-and-forget)
+    if (car.ownerEmail) {
+      sendMail({
         to: car.ownerEmail,
         subject: `New Rental Inquiry for ${car.year} ${car.make} ${car.model}`,
         html: `
@@ -61,17 +46,7 @@ router.post('/inquiry', async (req, res) => {
           <p><strong>Message:</strong></p>
           <p>${message}</p>
         `
-      };
-
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.error('Email error:', error);
-        } else {
-          console.log('Email sent:', info.response);
-        }
-      });
-    } else if (car.ownerEmail && !transporter) {
-      console.warn('Email not sent: SMTP credentials not configured');
+      }).catch(err => console.error('Email error:', err));
     }
 
     res.status(201).json({ 

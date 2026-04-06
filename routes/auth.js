@@ -4,22 +4,8 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { getJwtSecret } = require('../utils/jwtSecret');
 const auth = require('../middleware/auth');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('../services/email');
 const router = express.Router();
-
-// Email transporter setup (only if credentials are provided)
-let transporter = null;
-if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: process.env.SMTP_PORT || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-}
 
 // Login
 router.post('/login', async (req, res) => {
@@ -137,32 +123,23 @@ router.post('/forgot-password', async (req, res) => {
     await user.save();
 
     // Send email with reset link
-    if (transporter) {
-      const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/admin/reset-password?token=${resetToken}`;
-      
-      const mailOptions = {
-        from: process.env.SMTP_USER,
-        to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
-        subject: 'Password Reset Request',
-        html: `
-          <h2>Password Reset Request</h2>
-          <p>You requested a password reset for your Sarasota Automotive admin account.</p>
-          <p>Click the link below to reset your password (valid for 1 hour):</p>
-          <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
-            Reset Password
-          </a>
-          <p>Or copy this link:</p>
-          <p>${resetUrl}</p>
-          <p>If you did not request this, please ignore this email.</p>
-        `
-      };
-
-      await transporter.sendMail(mailOptions);
-      return res.json({ message: 'If an account exists with that username, a password reset link will be sent' });
-    } else {
-      // If email is not configured, return the token directly (for development)
-      return res.json({ message: 'Email not configured. Reset token:', resetToken: resetToken });
-    }
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:3000'}/admin/reset-password?token=${resetToken}`;
+    await sendMail({
+      to: process.env.ADMIN_EMAIL || process.env.SMTP_USER,
+      subject: 'Password Reset Request',
+      html: `
+        <h2>Password Reset Request</h2>
+        <p>You requested a password reset for your Sarasota Automotive admin account.</p>
+        <p>Click the link below to reset your password (valid for 1 hour):</p>
+        <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+          Reset Password
+        </a>
+        <p>Or copy this link:</p>
+        <p>${resetUrl}</p>
+        <p>If you did not request this, please ignore this email.</p>
+      `
+    });
+    return res.json({ message: 'If an account exists with that username, a password reset link will be sent' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

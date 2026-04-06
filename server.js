@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 // In production, also load .env.production if present (deploy renames it to .env; this is a fallback)
 if (process.env.NODE_ENV === 'production') {
@@ -12,11 +13,50 @@ const User = require('./models/User');
 
 const app = express();
 
+// Rate limiters
+// Strict limiter for auth endpoints (login, forgot-password, init-admin)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts, please try again in 15 minutes.' }
+});
+
+// General limiter for public write endpoints (contact form, rental inquiry)
+const publicWriteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please try again later.' }
+});
+
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  'https://sarasotaautomotive.com',
+  'https://www.sarasotaautomotive.com',
+  ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : [])
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
+
+// Apply rate limiting to auth and public write endpoints
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/init-admin', authLimiter);
+app.use('/api/contact', publicWriteLimiter);
+app.use('/api/rentals/inquiry', publicWriteLimiter);
 
 // Routes - API routes must come before the catch-all route
 // Note: Order matters - more specific routes should come first
