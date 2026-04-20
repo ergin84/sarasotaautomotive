@@ -161,9 +161,10 @@ jobs:
           "$PM2" save
           sudo env PATH=$PATH:/usr/bin $PM2 startup systemd -u deploy --hp /home/deploy 2>/dev/null || true
 
-          # Nginx
+          # Nginx — only write config if SSL is not already configured
           command -v nginx >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y nginx)
-          sudo tee /etc/nginx/sites-available/"$APP_NAME".conf > /dev/null << 'NGX'
+          if ! sudo grep -q "ssl_certificate" /etc/nginx/sites-available/"$APP_NAME".conf 2>/dev/null; then
+            sudo tee /etc/nginx/sites-available/"$APP_NAME".conf > /dev/null << 'NGX'
           server {
               listen 80;
               server_name _;
@@ -179,6 +180,7 @@ jobs:
               client_max_body_size 50M;
           }
           NGX
+          fi
           sudo ln -sf /etc/nginx/sites-available/"$APP_NAME".conf /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
