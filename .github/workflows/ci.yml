@@ -1,0 +1,196 @@
+name: CI / CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # ── CI: runs on every push & PR ──────────────────────────────────────────
+  ci:
+    name: CI – Install & syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check (node --check)
+        run: |
+          find . -name "*.js" \
+            ! -path "./node_modules/*" \
+            ! -path "./public/*" \
+            -exec node --check {} \;
+
+  # ── CD: runs only on main branch pushes (not PRs) ────────────────────────
+  deploy:
+    name: Deploy to Hostinger VPS (187.124.225.101)
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 187.124.225.101 >> ~/.ssh/known_hosts
+
+      - name: Write .env.deploy from secret
+        run: |
+          printf '%s\n' "${{ secrets.ENV_DEPLOY }}" > .env.deploy
+          chmod 600 .env.deploy
+
+      - name: Prepare deployment bundle
+        run: |
+          TEMP_DIR=$(mktemp -d)
+          echo "TEMP_DIR=$TEMP_DIR" >> "$GITHUB_ENV"
+
+          rsync -a \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude '*.log' \
+            --exclude '.env' \
+            --exclude '.env.local' \
+            --exclude '.env.production' \
+            --exclude '.env.deploy' \
+            --exclude 'public/uploads' \
+            --exclude '.DS_Store' \
+            --exclude 'logs' \
+            --exclude 'tmp' \
+            ./ "$TEMP_DIR/"
+
+          cp .env.deploy "$TEMP_DIR/.env.production"
+          cp .env.deploy "$TEMP_DIR/.env"
+          chmod 600 "$TEMP_DIR/.env.production" "$TEMP_DIR/.env"
+
+      - name: Backup current release on VPS
+        env:
+          VPS_IP: "187.124.225.101"
+          VPS_USER: "root"
+          REMOTE_DIR: "/var/www/sarasota_automotive"
+          APP_NAME: "sarasota-automotive"
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          SSH="ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
+
+          $SSH "$VPS_USER@$VPS_IP" "mkdir -p $REMOTE_DIR /var/backups/$APP_NAME"
+          $SSH "$VPS_USER@$VPS_IP" \
+            "[ \"\$(ls -A $REMOTE_DIR 2>/dev/null)\" ] && \
+             tar -czf /var/backups/$APP_NAME/backup_${TIMESTAMP}.tar.gz -C $REMOTE_DIR . 2>/dev/null || true"
+
+      - name: Upload files to VPS
+        env:
+          VPS_IP: "187.124.225.101"
+          VPS_USER: "root"
+          REMOTE_DIR: "/var/www/sarasota_automotive"
+        run: |
+          rsync -avz --delete \
+            --exclude 'public/uploads' \
+            -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa" \
+            "$TEMP_DIR/" "$VPS_USER@$VPS_IP:$REMOTE_DIR/"
+
+      - name: Remote setup (Node, MongoDB, PM2, Nginx)
+        env:
+          VPS_IP: "187.124.225.101"
+          VPS_USER: "root"
+          REMOTE_DIR: "/var/www/sarasota_automotive"
+          APP_NAME: "sarasota-automotive"
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "$VPS_USER@$VPS_IP" \
+            env REMOTE_DIR="$REMOTE_DIR" APP_NAME="$APP_NAME" bash << 'REMOTE'
+          set -e
+          export PATH="/usr/local/bin:/usr/local/lib/nodejs/bin:/usr/bin:/bin:$PATH"
+          [ -s /root/.nvm/nvm.sh ] && . /root/.nvm/nvm.sh
+
+          cd "$REMOTE_DIR"
+          mkdir -p public/uploads
+          [ -f .env.production ] && cp .env.production .env && chmod 600 .env
+
+          # Node.js
+          if ! command -v node >/dev/null 2>&1; then
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y curl
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+            apt-get install -y nodejs
+          fi
+          node -v && npm -v
+
+          # MongoDB
+          if ! command -v mongod >/dev/null 2>&1; then
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get install -y gnupg curl
+            curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
+              | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+            echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+              https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+              > /etc/apt/sources.list.d/mongodb-org-7.0.list
+            apt-get update -qq && apt-get install -y mongodb-org
+            systemctl enable mongod
+          fi
+          systemctl start mongod 2>/dev/null || systemctl start mongodb 2>/dev/null || true
+          sleep 2
+
+          # Dependencies
+          npm ci --omit=dev 2>/dev/null || npm install --production
+
+          # PM2
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+          PM2=$(command -v pm2)
+          "$PM2" delete "$APP_NAME" 2>/dev/null || true
+          "$PM2" start server.js --name "$APP_NAME" --cwd "$REMOTE_DIR" --env production
+          "$PM2" save
+          "$PM2" startup systemd -u root --hp /root 2>/dev/null | tail -1 || true
+
+          # Nginx
+          command -v nginx >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y nginx)
+          cat > /etc/nginx/sites-available/"$APP_NAME".conf << 'NGX'
+          server {
+              listen 80;
+              server_name _;
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+              location /health { return 200 "healthy\n"; add_header Content-Type text/plain; }
+              client_max_body_size 50M;
+          }
+          NGX
+          ln -sf /etc/nginx/sites-available/"$APP_NAME".conf /etc/nginx/sites-enabled/
+          rm -f /etc/nginx/sites-enabled/default
+          nginx -t && systemctl enable nginx && systemctl restart nginx
+
+          "$PM2" restart "$APP_NAME" --update-env 2>/dev/null || true
+          "$PM2" save
+          sleep 2
+          echo "=== Deploy complete ==="
+          "$PM2" status
+          REMOTE
+
+      - name: Health check
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://187.124.225.101/health || echo "000")
+          echo "Health check: $STATUS"
+          [ "$STATUS" = "200" ] || echo "::warning::Health check returned $STATUS"
